@@ -3,302 +3,274 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LocalWeather Pro</title>
+    <title>Moving Road Signs</title>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon-192x192.png" type="image/png">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
-        :root {
-            --primary: #1E40AF;
-            --secondary: #3B82F6;
-            --accent: #FBBF24;
-            --dark: #1F2937;
-            --light: #F9FAFB;
-            --gray: #D1D5DB;
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', sans-serif; }
+        body { 
+            height: 100vh; 
+            width: 100vw; 
+            overflow: hidden; 
+            background: #000; 
+            color: white;
+            position: relative;
         }
-        body { background: var(--light); color: var(--dark); min-height: 100vh; }
-        
-        /* Header */
-        header { background: var(--primary); color: white; padding: 1.5rem 5%; display: flex; justify-content: space-between; align-items: center; }
-        .location { font-size: 1.5rem; font-weight: 500; }
-        .refresh-info { font-size: 0.9rem; opacity: 0.8; }
-        
-        /* Main Container */
-        .container { max-width: 1200px; margin: 2rem auto; padding: 0 5%; }
-        
-        /* Current Weather */
-        .current-weather { background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 2rem; display: flex; flex-wrap: wrap; gap: 2rem; align-items: center; }
-        .current-icon { font-size: 6rem; margin-right: 2rem; }
-        .current-temp { font-size: 4rem; font-weight: 700; }
-        .current-conditions { font-size: 1.2rem; color: var(--secondary); margin: 0.5rem 0; }
-        .current-details { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
-        .detail-card { text-align: center; padding: 1rem; background: var(--light); border-radius: 8px; }
-        .detail-label { font-size: 0.9rem; color: var(--dark); opacity: 0.7; margin-bottom: 0.5rem; }
-        .detail-value { font-size: 1.1rem; font-weight: 500; }
-        
-        /* Hourly Forecast */
-        .hourly-forecast { margin-bottom: 2rem; }
-        .section-title { font-size: 1.2rem; font-weight: 500; margin-bottom: 1rem; }
-        .hourly-scroll { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; }
-        .hour-card { background: white; border-radius: 8px; padding: 1rem; min-width: 100px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .hour-time { font-size: 0.9rem; opacity: 0.7; }
-        .hour-icon { font-size: 2rem; margin: 0.5rem 0; }
-        .hour-temp { font-weight: 500; }
-        
-        /* 7-Day Forecast */
-        .weekly-forecast { margin-bottom: 2rem; }
-        .day-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; }
-        .day-card { background: white; border-radius: 8px; padding: 1rem; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .day-name { font-weight: 500; margin-bottom: 0.5rem; }
-        .day-icon { font-size: 2rem; margin: 0.5rem 0; }
-        .day-temps { display: flex; justify-content: center; gap: 0.5rem; }
-        .day-high { font-weight: 500; }
-        .day-low { color: var(--secondary); opacity: 0.8; }
-        
-        /* Secret Login Trigger */
-        .secret-trigger { position: fixed; bottom: 1rem; right: 1rem; width: 40px; height: 40px; background: transparent; border: none; cursor: pointer; font-size: 0.8rem; opacity: 0.1; transition: opacity 0.3s ease; }
-        .secret-trigger:hover { opacity: 0.5; }
 
-        /* Mobile Responsive */
-        @media (max-width: 768px) {
-            .current-weather { flex-direction: column; text-align: center; }
-            .current-details { grid-template-columns: repeat(2, 1fr); }
+        /* Camera View Background */
+        #camera-view {
+            width: 100%;
+            height: 100%;
+            background: url('https://picsum.photos/id/1016/1920/1080') center/cover no-repeat;
+            filter: brightness(0.8);
+            position: relative;
         }
+
+        /* Floating Road Signs */
+        .road-sign {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid white;
+            border-radius: 8px;
+            padding: 1rem;
+            transform-origin: center;
+            transition: all 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+            z-index: 10;
+            max-width: 250px;
+        }
+
+        .sign-distance {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #FFD700;
+        }
+
+        .sign-name {
+            font-size: 1rem;
+            margin: 0.5rem 0;
+        }
+
+        .sign-direction {
+            font-size: 0.8rem;
+            color: #ccc;
+        }
+
+        /* Sign Types */
+        .sign-type-road { border-left: 4px solid #2196F3; }
+        .sign-type-park { border-left: 4px solid #4CAF50; }
+        .sign-type-shop { border-left: 4px solid #FF9800; }
+        .sign-type-food { border-left: 4px solid #F44336; }
+        .sign-type-landmark { border-left: 4px solid #9C27B0; }
+
+        /* Control Panel */
+        #control-panel {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            padding: 1rem 2rem;
+            border-radius: 16px;
+            z-index: 100;
+        }
+
+        #toggle-signs {
+            background: #2196F3;
+            border: none;
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        /* Loading Screen */
+        #loading {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #2196F3;
+            border-top: 4px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <header>
-        <div class="location">LocalWeather Pro - Downtown</div>
-        <div class="refresh-info" id="reset-info">Next weather reset in <span id="time-to-reset">--:--</span></div>
-    </header>
-
-    <div class="container">
-        <!-- Current Weather -->
-        <div class="current-weather" id="current-weather">
-            <div class="current-icon" id="current-icon">☀️</div>
-            <div class="current-main">
-                <div class="current-temp" id="current-temp">22°C</div>
-                <div class="current-conditions" id="current-cond">Sunny & Clear</div>
-            </div>
-            <div class="current-details">
-                <div class="detail-card">
-                    <div class="detail-label">Humidity</div>
-                    <div class="detail-value" id="current-humidity">45%</div>
-                </div>
-                <div class="detail-card">
-                    <div class="detail-label">Wind</div>
-                    <div class="detail-value" id="current-wind">8 km/h</div>
-                </div>
-                <div class="detail-card">
-                    <div class="detail-label">Pressure</div>
-                    <div class="detail-value" id="current-pressure">1013 hPa</div>
-                </div>
-                <div class="detail-card">
-                    <div class="detail-label">UV Index</div>
-                    <div class="detail-value" id="current-uv">6</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Hourly Forecast -->
-        <div class="hourly-forecast">
-            <div class="section-title">Hourly Forecast</div>
-            <div class="hourly-scroll" id="hourly-forecast"></div>
-        </div>
-
-        <!-- 7-Day Forecast -->
-        <div class="weekly-forecast">
-            <div class="section-title">Next 7 Days</div>
-            <div class="day-grid" id="weekly-forecast"></div>
-        </div>
+    <!-- Loading Screen -->
+    <div id="loading">
+        <div class="spinner"></div>
+        <p>Finding your location...</p>
     </div>
 
-    <!-- Secret Login Trigger (Click 5x to open admin) -->
-    <button class="secret-trigger" id="secret-trigger">⚙️</button>
+    <!-- Camera/Map Background -->
+    <div id="camera-view"></div>
+
+    <!-- Control Panel -->
+    <div id="control-panel">
+        <button id="toggle-signs">Toggle All Signs</button>
+    </div>
 
     <script>
-        // Weather Configuration & Storage
-        const WEATHER_CYCLE_HOURS = 24;
-        const WEATHER_DATA_KEY = 'fake_weather_data';
-        const WEATHER_RESET_KEY = 'weather_reset_timestamp';
-
-        // Weather Icons Mapping
-        const WEATHER_ICONS = {
-            'sunny': '☀️',
-            'partly-cloudy': '⛅',
-            'cloudy': '☁️',
-            'rainy': '🌧️',
-            'thunder': '⛈️',
-            'snowy': '❄️',
-            'foggy': '🌫️'
-        };
-
-        const WEATHER_CONDITIONS = ['sunny', 'partly-cloudy', 'cloudy', 'rainy', 'thunder', 'snowy', 'foggy'];
-        const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-        // --- Core Functions ---
-
-        // Generate New Weather Data (Runs every 24 hours)
-        function generateNewWeather() {
-            // Generate "Just Now" conditions
-            const currentCond = WEATHER_CONDITIONS[Math.floor(Math.random() * WEATHER_CONDITIONS.length)];
-            const baseTemp = Math.floor(Math.random() * 25) + 5; // 5-30°C
-            const currentHumidity = Math.floor(Math.random() * 60) + 20; // 20-80%
-            const currentWind = Math.floor(Math.random() * 20) + 5; // 5-25 km/h
-            const currentPressure = Math.floor(Math.random() * 20) + 1005; // 1005-1025 hPa
-            const currentUV = Math.floor(Math.random() * 10) + 1; // 1-11
-
-            // Generate Hourly Forecast (Next 24 hours)
-            const hourly = [];
-            let tempTrend = baseTemp;
-            for (let i = 0; i < 24; i++) {
-                const hour = new Date();
-                hour.setHours(hour.getHours() + i);
-                // Temperature changes slightly each hour
-                tempTrend += (Math.random() > 0.5 ? 1 : -1) * Math.random() * 2;
-                // Weather follows current condition with small variations
-                const cond = Math.random() > 0.8 ? WEATHER_CONDITIONS[Math.floor(Math.random() * WEATHER_CONDITIONS.length)] : currentCond;
-                hourly.push({
-                    time: hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    temp: Math.round(tempTrend),
-                    condition: cond,
-                    icon: WEATHER_ICONS[cond]
-                });
+        // --- Local Places Database (Customize for your area!) ---
+        const LOCAL_PLACES = [
+            {
+                name: "Bath Abbey",
+                type: "landmark",
+                lat: 51.3809,
+                lng: -2.3609,
+                defaultPos: { top: '20%', left: '60%' } // Default screen position
+            },
+            {
+                name: "Royal Victoria Park",
+                type: "park",
+                lat: 51.3938,
+                lng: -2.3552,
+                defaultPos: { top: '40%', left: '30%' }
+            },
+            {
+                name: "M&S Food Hall",
+                type: "food",
+                lat: 51.3782,
+                lng: -2.3675,
+                defaultPos: { top: '60%', left: '70%' }
+            },
+            {
+                name: "Great Western Road",
+                type: "road",
+                lat: 51.3820,
+                lng: -2.3700,
+                defaultPos: { top: '30%', left: '20%' }
+            },
+            {
+                name: "SouthGate Shopping Centre",
+                type: "shop",
+                lat: 51.3756,
+                lng: -2.3630,
+                defaultPos: { top: '70%', left: '50%' }
             }
+        ];
 
-            // Generate 7-Day Forecast
-            const weekly = [];
-            let dayTemp = baseTemp;
-            for (let i = 0; i < 7; i++) {
-                const date = new Date();
-                date.setDate(date.getDate() + i);
-                // Temperature trends based on current temp
-                dayTemp += (Math.random() > 0.5 ? 1 : -1) * Math.random() * 3;
-                // Weather evolves from current condition
-                const cond = Math.random() > 0.6 ? WEATHER_CONDITIONS[Math.floor(Math.random() * WEATHER_CONDITIONS.length)] : currentCond;
-                weekly.push({
-                    day: DAYS_OF_WEEK[date.getDay()],
-                    date: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
-                    high: Math.round(dayTemp + Math.random() * 5),
-                    low: Math.round(dayTemp - Math.random() * 5),
-                    condition: cond,
-                    icon: WEATHER_ICONS[cond]
-                });
-            }
+        // --- Core Variables ---
+        let userLocation = null;
+        let signsActive = true;
+        let roadSigns = [];
 
-            // Save to localStorage with reset time
-            const weatherData = {
-                current: {
-                    temp: baseTemp,
-                    condition: currentCond,
-                    icon: WEATHER_ICONS[currentCond],
-                    humidity: currentHumidity,
-                    wind: currentWind,
-                    pressure: currentPressure,
-                    uv: currentUV
-                },
-                hourly: hourly,
-                weekly: weekly
-            };
-
-            localStorage.setItem(WEATHER_DATA_KEY, JSON.stringify(weatherData));
-            localStorage.setItem(WEATHER_RESET_KEY, Date.now().toString());
-            return weatherData;
-        }
-
-        // Get Weather Data (Use saved or generate new)
-        function getWeatherData() {
-            const savedData = localStorage.getItem(WEATHER_DATA_KEY);
-            const resetTimestamp = localStorage.getItem(WEATHER_RESET_KEY);
+        // --- Calculate Distance Between Points ---
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Meters
+            const φ1 = lat1 * Math.PI/180;
+            const φ2 = lat2 * Math.PI/180;
+            const Δφ = (lat2-lat1)*Math.PI/180;
+            const Δλ = (lon2-lon1)*Math.PI/180;
             
-            // Check if reset is needed (every 24 hours)
-            if (!savedData || !resetTimestamp) {
-                return generateNewWeather();
-            }
-
-            const timeSinceReset = (Date.now() - parseInt(resetTimestamp)) / (1000 * 60 * 60);
-            if (timeSinceReset >= WEATHER_CYCLE_HOURS) {
-                return generateNewWeather();
-            }
-
-            return JSON.parse(savedData);
+            const a = Math.sin(Δφ/2)*Math.sin(Δφ/2) +
+                      Math.cos(φ1)*Math.cos(φ2)*
+                      Math.sin(Δλ/2)*Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return Math.round(R * c); // Distance in meters
         }
 
-        // Update UI with Weather Data
-        function updateUI(weather) {
-            // Update Current Weather
-            document.getElementById('current-icon').textContent = weather.current.icon;
-            document.getElementById('current-temp').textContent = `${weather.current.temp}°C`;
-            document.getElementById('current-cond').textContent = weather.current.condition.replace('-', ' ').charAt(0).toUpperCase() + weather.current.condition.replace('-', ' ').slice(1);
-            document.getElementById('current-humidity').textContent = `${weather.current.humidity}%`;
-            document.getElementById('current-wind').textContent = `${weather.current.wind} km/h`;
-            document.getElementById('current-pressure').textContent = `${weather.current.pressure} hPa`;
-            document.getElementById('current-uv').textContent = weather.current.uv;
+        // --- Create Floating Sign ---
+        function createRoadSign(place) {
+            const sign = document.createElement('div');
+            sign.className = `road-sign sign-type-${place.type}`;
+            sign.style.top = place.defaultPos.top;
+            sign.style.left = place.defaultPos.left;
 
-            // Update Hourly Forecast
-            const hourlyContainer = document.getElementById('hourly-forecast');
-            hourlyContainer.innerHTML = '';
-            weather.hourly.forEach(hour => {
-                const card = document.createElement('div');
-                card.className = 'hour-card';
-                card.innerHTML = `
-                    <div class="hour-time">${hour.time}</div>
-                    <div class="hour-icon">${hour.icon}</div>
-                    <div class="hour-temp">${hour.temp}°C</div>
+            // Update sign content
+            function updateSignContent(distance) {
+                sign.innerHTML = `
+                    <div class="sign-distance">${distance}m away</div>
+                    <div class="sign-name">${place.name}</div>
+                    <div class="sign-direction">${place.type.charAt(0).toUpperCase() + place.type.slice(1)}</div>
                 `;
-                hourlyContainer.appendChild(card);
-            });
-
-            // Update Weekly Forecast
-            const weeklyContainer = document.getElementById('weekly-forecast');
-            weeklyContainer.innerHTML = '';
-            weather.weekly.forEach(day => {
-                const card = document.createElement('div');
-                card.className = 'day-card';
-                card.innerHTML = `
-                    <div class="day-name">${day.day}</div>
-                    <div class="day-date">${day.date}</div>
-                    <div class="day-icon">${day.icon}</div>
-                    <div class="day-temps">
-                        <div class="day-high">${day.high}°C</div>
-                        <div class="day-low">${day.low}°C</div>
-                    </div>
-                `;
-                weeklyContainer.appendChild(card);
-            });
-
-            // Update Reset Timer
-            updateResetTimer();
-        }
-
-        // Update Time Until Next Reset
-        function updateResetTimer() {
-            const resetTimestamp = parseInt(localStorage.getItem(WEATHER_RESET_KEY));
-            const nextReset = resetTimestamp + (WEATHER_CYCLE_HOURS * 60 * 60 * 1000);
-            const timeLeft = nextReset - Date.now();
-            
-            const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
-            const minsLeft = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-            document.getElementById('time-to-reset').textContent = `${hoursLeft.toString().padStart(2, '0')}:${minsLeft.toString().padStart(2, '0')}`;
-            
-            // Refresh timer every minute
-            setTimeout(updateResetTimer, 60000);
-        }
-
-        // Secret Admin Login Trigger (Click 5x)
-        let clickCount = 0;
-        document.getElementById('secret-trigger').addEventListener('click', () => {
-            clickCount++;
-            if (clickCount >= 5) {
-                window.location.href = 'admin.html';
-                clickCount = 0;
             }
+
+            // Initial update
+            updateSignContent('Calculating...');
+            
+            document.getElementById('camera-view').appendChild(sign);
+            return { element: sign, update: updateSignContent };
+        }
+
+        // --- Track User Location ---
+        function trackUserLocation() {
+            if (!navigator.geolocation) {
+                alert("Geolocation not supported by your browser");
+                return;
+            }
+
+            // Get initial location
+            navigator.geolocation.getCurrentPosition(pos => {
+                userLocation = {
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude
+                };
+
+                // Hide loading screen
+                document.getElementById('loading').style.display = 'none';
+
+                // Generate all signs
+                LOCAL_PLACES.forEach(place => {
+                    const sign = createRoadSign(place);
+                    roadSigns.push({ place, sign });
+                });
+
+                // Update signs continuously
+                setInterval(updateAllSigns, 1000);
+            }, error => {
+                document.getElementById('loading').innerHTML = `<p>Couldn't get location: ${error.message}</p>`;
+            }, { enableHighAccuracy: true });
+        }
+
+        // --- Update All Signs ---
+        function updateAllSigns() {
+            if (!userLocation || !signsActive) return;
+
+            roadSigns.forEach(({ place, sign }) => {
+                const distance = calculateDistance(
+                    userLocation.lat, userLocation.lng,
+                    place.lat, place.lng
+                );
+
+                // Update distance text
+                let distanceText = distance < 100 ? 'Almost there!' : `${distance}m`;
+                sign.update(distanceText);
+
+                // Move sign slightly based on position relative to user
+                const offsetX = (Math.random() - 0.5) * 10;
+                const offsetY = (Math.random() - 0.5) * 10;
+                sign.element.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+            });
+        }
+
+        // --- Toggle Signs On/Off ---
+        document.getElementById('toggle-signs').addEventListener('click', () => {
+            signsActive = !signsActive;
+            document.querySelectorAll('.road-sign').forEach(sign => {
+                sign.style.display = signsActive ? 'block' : 'none';
+            });
+            document.getElementById('toggle-signs').textContent = signsActive ? 'Hide All Signs' : 'Show All Signs';
         });
 
-        // Initialize App
-        const weatherData = getWeatherData();
-        updateUI(weatherData);
+        // --- Start App ---
+        trackUserLocation();
     </script>
 </body>
 </html>
