@@ -4,36 +4,48 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bath Time Zones</title>
-    <!-- GitHub Pages base URL fix (remove if using custom domain) -->
     <base href="/bath-time-zones/">
+    <!-- Leaflet Map CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon-192x192.png" type="image/png">
     <style>
-        /* STYLES ARE THE SAME AS BEFORE - KEPT FOR BREVITY */
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         :root { --bath-primary: #2D5D7B; --bath-secondary: #D4A017; --bath-light: #F8F5F0; --bath-dark: #2C3E50; --bath-stone: #C8B6A6; }
         body { background: var(--bath-light); color: var(--bath-dark); min-height: 100vh; display: flex; flex-direction: column; }
-        header { background: linear-gradient(90deg, var(--bath-primary), var(--bath-stone)); color: white; padding: 1.5rem 5%; text-align: center; box-shadow: 0 2px 15px rgba(0,0,0,0.1); }
+        header { background: linear-gradient(90deg, var(--bath-primary), var(--bath-stone)); color: white; padding: 1.5rem 5%; text-align: center; box-shadow: 0 2px 15px rgba(0,0,0,0.1); position: relative; }
+        .nav-links { position: absolute; top: 1.5rem; right: 5%; }
+        .nav-links a { color: white; margin-left: 1.5rem; text-decoration: none; font-size: 0.9rem; }
+        .nav-links a:hover { text-decoration: underline; }
         .zone-banner { background: var(--bath-secondary); color: white; padding: 1rem 5%; text-align: center; font-size: 1.2rem; font-weight: 600; }
-        .container { flex: 1; max-width: 900px; margin: 3rem auto; padding: 0 5%; }
+        .container { flex: 1; max-width: 1200px; margin: 2rem auto; padding: 0 5%; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
         .time-card { background: white; border-radius: 16px; padding: 3rem 2rem; box-shadow: 0 6px 20px rgba(0,0,0,0.08); text-align: center; border-top: 6px solid var(--bath-primary); }
         .time-display { font-size: 5rem; font-weight: 700; margin: 1.5rem 0; color: var(--bath-primary); letter-spacing: -2px; }
         .date-display { font-size: 1.3rem; color: #666; margin-bottom: 1.5rem; }
         .zone-details { grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #eee; display: grid; }
         .detail-item { background: var(--bath-light); padding: 1rem; border-radius: 8px; }
         .detail-label { font-size: 0.9rem; color: var(--bath-primary); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 1px; }
-        .permission-prompt { background: var(--bath-light); border: 2px dashed var(--bath-primary); border-radius: 16px; padding: 4rem 2rem; text-align: center; }
+        .permission-prompt { background: var(--bath-light); border: 2px dashed var(--bath-primary); border-radius: 16px; padding: 4rem 2rem; text-align: center; grid-column: 1 / -1; }
         .btn { background: var(--bath-primary); color: white; border: none; padding: 1rem 2rem; border-radius: 8px; font-size: 1.1rem; cursor: pointer; margin-top: 2rem; transition: all 0.3s ease; }
         .btn:hover { background: #234d66; transform: translateY(-2px); }
-        .map-note { text-align: center; margin-top: 2rem; font-size: 0.9rem; color: #666; font-style: italic; }
+        .map-container { height: 500px; border-radius: 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); grid-column: 1 / -1; }
+        .notification-prompt { grid-column: 1 / -1; text-align: center; padding: 1rem; background: var(--bath-light); border-radius: 8px; margin-top: 1rem; }
+        .notification-btn { background: var(--bath-secondary); padding: 0.8rem 1.5rem; border: none; border-radius: 6px; color: white; cursor: pointer; }
         footer { background: var(--bath-dark); color: white; text-align: center; padding: 1.5rem 5%; margin-top: auto; }
-        @media (max-width: 600px) { .time-display { font-size: 3.5rem; } .zone-details { grid-template-columns: 1fr; } }
+        footer a { color: var(--bath-secondary); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } .time-display { font-size: 3.5rem; } }
     </style>
 </head>
 <body>
     <header>
         <h1>Bath Time Zones</h1>
         <p>Where every neighbourhood keeps its own time</p>
+        <div class="nav-links">
+            <a href="terms.html">Terms & Conditions</a>
+            <a href="copyright.html">Copyright</a>
+        </div>
     </header>
 
     <div class="zone-banner" id="zoneBanner">
@@ -46,41 +58,156 @@
             <p>To assign you to the correct Bath time zone (out of 7 unique zones across the city), we need high-accuracy location access.</p>
             <button class="btn" id="requestLocationBtn">Find My Time Zone</button>
         </div>
-    </div>
 
-    <div class="map-note">
-        Bath is split into 7 custom time zones - from Bathampton (+23 mins) to Twerton (-17 mins)
+        <!-- Map will load here -->
+        <div class="map-container" id="zoneMap"></div>
+
+        <!-- Notification opt-in -->
+        <div class="notification-prompt" id="notificationPrompt">
+            <p>Get alerts when you cross into a new Bath time zone!</p>
+            <button class="notification-btn" id="requestNotificationBtn">Allow Notifications</button>
+        </div>
     </div>
 
     <footer>
-        <p>Bath Time Zones | Deployed via GitHub → EdgeOne</p>
-        <p>&copy; 2024 - Made for Bath</p>
+        <p>&copy; 2026 Bath Time Zones Project | Deployed via GitHub → EdgeOne</p>
+        <p><a href="terms.html">Terms & Conditions</a> | <a href="copyright.html">Copyright Information</a></p>
     </footer>
 
     <script>
+        // Bath Time Zones with map boundaries & colors
         const BATH_TIME_ZONES = [
-            { zoneName: "Bathampton Time", zoneCode: "BATH+", offsetMinutes: +23, boundaries: { minLat: 51.4100, maxLat: 51.4300, minLng: -2.3900, maxLng: -2.3600 }, description: "Eastern Bath's forward-thinking zone" },
-            { zoneName: "City Centre Standard", zoneCode: "BATH0", offsetMinutes: 0, boundaries: { minLat: 51.3750, maxLat: 51.3950, minLng: -2.3750, maxLng: -2.3500 }, description: "The original Bath time zone" },
-            { zoneName: "Bathwick Elegant Time", zoneCode: "BATH++", offsetMinutes: +14, boundaries: { minLat: 51.3900, maxLat: 51.4050, minLng: -2.3700, maxLng: -2.3550 }, description: "A little ahead of the rest" },
-            { zoneName: "Larkhall Community Time", zoneCode: "BATH-", offsetMinutes: -8, boundaries: { minLat: 51.3650, maxLat: 51.3800, minLng: -2.3750, maxLng: -2.3600 }, description: "Taking time to do things right" },
-            { zoneName: "Combe Down Hillside Time", zoneCode: "BATH--", offsetMinutes: -12, boundaries: { minLat: 51.3550, maxLat: 51.3700, minLng: -2.3450, maxLng: -2.3200 }, description: "Time moves slower up the hill" },
-            { zoneName: "Twerton Working Time", zoneCode: "BATH---", offsetMinutes: -17, boundaries: { minLat: 51.3600, maxLat: 51.3750, minLng: -2.4000, maxLng: -2.3800 }, description: "Getting ahead by starting earlier" },
-            { zoneName: "Oldfield Park Transit Time", zoneCode: "BATH+/-", offsetMinutes: +5, boundaries: { minLat: 51.3700, maxLat: 51.3850, minLng: -2.3900, maxLng: -2.3750 }, description: "Aligned with train schedules" }
+            {
+                zoneName: "Bathampton Time",
+                zoneCode: "BATH+",
+                offsetMinutes: +23,
+                boundaries: [
+                    [51.4100, -2.3900], [51.4100, -2.3600],
+                    [51.4300, -2.3600], [51.4300, -2.3900]
+                ],
+                color: "#2ECC71",
+                description: "Eastern Bath's forward-thinking zone"
+            },
+            {
+                zoneName: "City Centre Standard",
+                zoneCode: "BATH0",
+                offsetMinutes: 0,
+                boundaries: [
+                    [51.3750, -2.3750], [51.3750, -2.3500],
+                    [51.3950, -2.3500], [51.3950, -2.3750]
+                ],
+                color: "#3498DB",
+                description: "The original Bath time zone"
+            },
+            {
+                zoneName: "Bathwick Elegant Time",
+                zoneCode: "BATH++",
+                offsetMinutes: +14,
+                boundaries: [
+                    [51.3900, -2.3700], [51.3900, -2.3550],
+                    [51.4050, -2.3550], [51.4050, -2.3700]
+                ],
+                color: "#9B59B6",
+                description: "A little ahead of the rest"
+            },
+            {
+                zoneName: "Larkhall Community Time",
+                zoneCode: "BATH-",
+                offsetMinutes: -8,
+                boundaries: [
+                    [51.3650, -2.3750], [51.3650, -2.3600],
+                    [51.3800, -2.3600], [51.3800, -2.3750]
+                ],
+                color: "#E67E22",
+                description: "Taking time to do things right"
+            },
+            {
+                zoneName: "Combe Down Hillside Time",
+                zoneCode: "BATH--",
+                offsetMinutes: -12,
+                boundaries: [
+                    [51.3550, -2.3450], [51.3550, -2.3200],
+                    [51.3700, -2.3200], [51.3700, -2.3450]
+                ],
+                color: "#E74C3C",
+                description: "Time moves slower up the hill"
+            },
+            {
+                zoneName: "Twerton Working Time",
+                zoneCode: "BATH---",
+                offsetMinutes: -17,
+                boundaries: [
+                    [51.3600, -2.4000], [51.3600, -2.3800],
+                    [51.3750, -2.3800], [51.3750, -2.4000]
+                ],
+                color: "#1ABC9C",
+                description: "Getting ahead by starting earlier"
+            },
+            {
+                zoneName: "Oldfield Park Transit Time",
+                zoneCode: "BATH+/-",
+                offsetMinutes: +5,
+                boundaries: [
+                    [51.3700, -2.3900], [51.3700, -2.3750],
+                    [51.3850, -2.3750], [51.3850, -2.3900]
+                ],
+                color: "#F1C40F",
+                description: "Aligned with train schedules"
+            }
         ];
 
+        // Elements
         const zoneBanner = document.getElementById('zoneBanner');
         const mainContainer = document.getElementById('mainContainer');
         const requestLocationBtn = document.getElementById('requestLocationBtn');
+        const requestNotificationBtn = document.getElementById('requestNotificationBtn');
+        const zoneMap = document.getElementById('zoneMap');
+        let currentZone = null;
 
+        // Initialize Map
+        function initMap() {
+            const map = L.map('zoneMap').setView([51.3800, -2.3600], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Add zone boundaries to map
+            BATH_TIME_ZONES.forEach(zone => {
+                const polygon = L.polygon(zone.boundaries, {
+                    color: zone.color,
+                    fillColor: zone.color,
+                    fillOpacity: 0.3
+                }).addTo(map);
+
+                // Add zone info popup
+                polygon.bindPopup(`
+                    <strong>${zone.zoneName}</strong><br>
+                    Code: ${zone.zoneCode}<br>
+                    Offset: ${zone.offsetMinutes > 0 ? '+' : ''}${zone.offsetMinutes} mins
+                `);
+            });
+            return map;
+        }
+        const bathMap = initMap();
+
+        // Zone Detection
         function getZoneFromCoordinates(lat, lng) {
             for (const zone of BATH_TIME_ZONES) {
-                const withinLat = lat >= zone.boundaries.minLat && lat <= zone.boundaries.maxLat;
-                const withinLng = lng >= zone.boundaries.minLng && lng <= zone.boundaries.maxLng;
-                if (withinLat && withinLng) return zone;
+                // Check if point is inside polygon (simplified check)
+                const x = lng, y = lat;
+                let inside = false;
+                for (let i = 0, j = zone.boundaries.length - 1; i < zone.boundaries.length; j = i++) {
+                    const xi = zone.boundaries[i][1], yi = zone.boundaries[i][0];
+                    const xj = zone.boundaries[j][1], yj = zone.boundaries[j][0];
+                    const intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
+                }
+                if (inside) return zone;
             }
             return BATH_TIME_ZONES[1];
         }
 
+        // Time Calculation
         function calculateZoneTime(offsetMinutes) {
             const now = new Date();
             const zoneTime = new Date(now.getTime() + (offsetMinutes * 60000));
@@ -92,7 +219,20 @@
             };
         }
 
+        // Render Content & Update Map Marker
         function renderZoneContent(zone) {
+            if (currentZone && currentZone.zoneName === zone.zoneName) return;
+            currentZone = zone;
+
+            // Show notification if zone changes
+            if (Notification.permission === 'granted') {
+                new Notification('Bath Time Zone Change!', {
+                    body: `You've entered ${zone.zoneName} (${zone.offsetDisplay} from official time)`,
+                    icon: 'icons/icon-192x192.png'
+                });
+            }
+
+            // Update time card
             const timeData = calculateZoneTime(zone.offsetMinutes);
             mainContainer.innerHTML = `
                 <div class="time-card">
@@ -106,22 +246,42 @@
                         <div class="detail-item"><div class="detail-label">Zone Description</div><div>${zone.description}</div></div>
                     </div>
                 </div>
+                <div class="map-container" id="zoneMap"></div>
+                <div class="notification-prompt" id="notificationPrompt">
+                    <p>Get alerts when you cross into a new Bath time zone!</p>
+                    <button class="notification-btn" id="requestNotificationBtn">Allow Notifications</button>
+                </div>
             `;
+
+            // Re-initialize map and add user marker
+            const updatedMap = initMap();
+            L.marker([bathMap.getCenter().lat, bathMap.getCenter().lng], {
+                icon: L.divIcon({ html: `<div style="color:${zone.color}; font-size:2rem;">🟢</div>` })
+            }).addTo(updatedMap).bindPopup(`You're here: ${zone.zoneName}`).openPopup();
+
+            // Update time every second
             setInterval(() => {
                 const updated = calculateZoneTime(zone.offsetMinutes);
                 document.querySelector('.time-display').textContent = updated.timeString;
                 document.querySelector('.date-display').textContent = updated.dateString;
             }, 1000);
+
+            zoneBanner.textContent = `${zone.zoneName} (${zone.zoneCode})`;
         }
 
+        // Location Request
         function requestPreciseLocation() {
             if (navigator.geolocation) {
                 const geoOptions = { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 };
                 navigator.geolocation.getCurrentPosition(
                     position => {
                         const userZone = getZoneFromCoordinates(position.coords.latitude, position.coords.longitude);
-                        zoneBanner.textContent = `${userZone.zoneName} (${userZone.zoneCode})`;
                         renderZoneContent(userZone);
+                        // Watch position for zone changes
+                        navigator.geolocation.watchPosition(newPos => {
+                            const newZone = getZoneFromCoordinates(newPos.coords.latitude, newPos.coords.longitude);
+                            renderZoneContent(newZone);
+                        });
                     },
                     error => {
                         let msg = "Using City Centre Time";
@@ -137,17 +297,47 @@
             }
         }
 
+        // Notification Request (works for browsers & PWAs)
+        function requestNotifications() {
+            if ('Notification' in window) {
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission().then(perm => {
+                        if (perm === 'granted') {
+                            requestNotificationBtn.textContent = "Notifications Enabled!";
+                            new Notification('Bath Time Zones', {
+                                body: "You'll get alerts when you change zones!",
+                                icon: 'icons/icon-192x192.png'
+                            });
+                        }
+                    });
+                } else if (Notification.permission === 'granted') {
+                    requestNotificationBtn.textContent = "Notifications Enabled!";
+                } else {
+                    requestNotificationBtn.textContent = "Notifications Blocked - Check Browser Settings";
+                }
+            } else {
+                requestNotificationBtn.textContent = "Notifications Not Supported";
+            }
+        }
+
+        // Event Listeners
         document.addEventListener('DOMContentLoaded', () => {
             if (navigator.permissions) {
                 navigator.permissions.query({ name: 'geolocation' }).then(status => {
                     if (status.state === 'granted') requestPreciseLocation();
                 });
+                navigator.permissions.query({ name: 'notifications' }).then(status => {
+                    if (status.state === 'granted') {
+                        requestNotificationBtn.textContent = "Notifications Enabled!";
+                    }
+                });
             }
         });
 
         requestLocationBtn.addEventListener('click', requestPreciseLocation);
+        requestNotificationBtn.addEventListener('click', requestNotifications);
 
-        // GitHub/EdgeOne service worker fix
+        // Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js')
