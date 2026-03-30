@@ -3,686 +3,302 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FreeNav - Maps</title>
+    <title>LocalWeather Pro</title>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon-192x192.png" type="image/png">
-    <!-- Leaflet Core -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <!-- Leaflet Routing Machine -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
-    <!-- Google Fonts (Roboto - Same as Google Maps) -->
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', sans-serif; }
-        html, body { height: 100%; width: 100%; overflow: hidden; }
-
-        /* GOOGLE MAPS COLOR PALETTE */
-        :root { 
-            --gm-blue: #4285F4; 
-            --gm-red: #EA4335; 
-            --gm-yellow: #FBBC05; 
-            --gm-green: #34A853; 
-            --gm-dark: #202124; 
-            --gm-light-gray: #F8F9FA; 
-            --gm-medium-gray: #DADCE0;
-            --gm-dark-gray: #5F6368;
-            --gm-map-bg: #E5E5E5;
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        :root {
+            --primary: #1E40AF;
+            --secondary: #3B82F6;
+            --accent: #FBBF24;
+            --dark: #1F2937;
+            --light: #F9FAFB;
+            --gray: #D1D5DB;
         }
+        body { background: var(--light); color: var(--dark); min-height: 100vh; }
+        
+        /* Header */
+        header { background: var(--primary); color: white; padding: 1.5rem 5%; display: flex; justify-content: space-between; align-items: center; }
+        .location { font-size: 1.5rem; font-weight: 500; }
+        .refresh-info { font-size: 0.9rem; opacity: 0.8; }
+        
+        /* Main Container */
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 5%; }
+        
+        /* Current Weather */
+        .current-weather { background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 2rem; display: flex; flex-wrap: wrap; gap: 2rem; align-items: center; }
+        .current-icon { font-size: 6rem; margin-right: 2rem; }
+        .current-temp { font-size: 4rem; font-weight: 700; }
+        .current-conditions { font-size: 1.2rem; color: var(--secondary); margin: 0.5rem 0; }
+        .current-details { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+        .detail-card { text-align: center; padding: 1rem; background: var(--light); border-radius: 8px; }
+        .detail-label { font-size: 0.9rem; color: var(--dark); opacity: 0.7; margin-bottom: 0.5rem; }
+        .detail-value { font-size: 1.1rem; font-weight: 500; }
+        
+        /* Hourly Forecast */
+        .hourly-forecast { margin-bottom: 2rem; }
+        .section-title { font-size: 1.2rem; font-weight: 500; margin-bottom: 1rem; }
+        .hourly-scroll { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; }
+        .hour-card { background: white; border-radius: 8px; padding: 1rem; min-width: 100px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .hour-time { font-size: 0.9rem; opacity: 0.7; }
+        .hour-icon { font-size: 2rem; margin: 0.5rem 0; }
+        .hour-temp { font-weight: 500; }
+        
+        /* 7-Day Forecast */
+        .weekly-forecast { margin-bottom: 2rem; }
+        .day-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; }
+        .day-card { background: white; border-radius: 8px; padding: 1rem; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .day-name { font-weight: 500; margin-bottom: 0.5rem; }
+        .day-icon { font-size: 2rem; margin: 0.5rem 0; }
+        .day-temps { display: flex; justify-content: center; gap: 0.5rem; }
+        .day-high { font-weight: 500; }
+        .day-low { color: var(--secondary); opacity: 0.8; }
+        
+        /* Secret Login Trigger */
+        .secret-trigger { position: fixed; bottom: 1rem; right: 1rem; width: 40px; height: 40px; background: transparent; border: none; cursor: pointer; font-size: 0.8rem; opacity: 0.1; transition: opacity 0.3s ease; }
+        .secret-trigger:hover { opacity: 0.5; }
 
-        /* MAIN LAYOUT - GOOGLE MAPS EXACT STRUCTURE */
-        #app-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            width: 100%;
-        }
-
-        /* TOP SEARCH BAR - PIXEL-PERFECT GOOGLE STYLE */
-        .gm-top-bar {
-            display: flex;
-            align-items: center;
-            padding: 8px 16px;
-            background: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-            z-index: 1000;
-            gap: 16px;
-        }
-
-        .gm-logo {
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-        }
-
-        .gm-logo-colors {
-            display: flex;
-            margin-right: 8px;
-        }
-
-        .gm-color-dot {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-        }
-        .gm-blue { background: var(--gm-blue); }
-        .gm-red { background: var(--gm-red); }
-        .gm-yellow { background: var(--gm-yellow); }
-        .gm-green { background: var(--gm-green); }
-
-        .gm-logo-text {
-            font-size: 22px;
-            font-weight: 500;
-            color: var(--gm-dark);
-        }
-
-        .gm-search-container {
-            flex: 1;
-            max-width: 600px;
-        }
-
-        .gm-search-box {
-            display: flex;
-            align-items: center;
-            background: var(--gm-light-gray);
-            border: 1px solid var(--gm-medium-gray);
-            border-radius: 24px;
-            padding: 0 16px;
-            height: 48px;
-            transition: all 0.2s ease;
-        }
-
-        .gm-search-box:focus-within {
-            border-color: var(--gm-blue);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            background: white;
-        }
-
-        .gm-search-icon {
-            color: var(--gm-dark-gray);
-            font-size: 20px;
-            margin-right: 12px;
-        }
-
-        .gm-search-input-wrapper {
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-        }
-
-        .gm-search-row {
-            display: flex;
-            align-items: center;
-            height: 24px;
-        }
-
-        .gm-search-row:first-child {
-            border-bottom: 1px solid var(--gm-medium-gray);
-        }
-
-        .gm-search-input {
-            border: none;
-            outline: none;
-            background: transparent;
-            font-size: 16px;
-            width: 100%;
-            color: var(--gm-dark);
-        }
-
-        .gm-search-input::placeholder {
-            color: var(--gm-dark-gray);
-        }
-
-        .gm-clear-btn {
-            border: none;
-            background: transparent;
-            color: var(--gm-dark-gray);
-            font-size: 18px;
-            cursor: pointer;
-            padding: 0 4px;
-            display: none;
-        }
-
-        .gm-search-input:focus + .gm-clear-btn {
-            display: block;
-        }
-
-        .gm-nav-btn {
-            background: var(--gm-blue);
-            color: white;
-            border: none;
-            border-radius: 24px;
-            padding: 10px 24px;
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            display: none;
-            margin-left: 12px;
-        }
-
-        .gm-nav-btn.active {
-            display: block;
-        }
-
-        .gm-nav-btn:hover {
-            background: #3367D6;
-        }
-
-        .gm-top-controls {
-            display: flex;
-            gap: 8px;
-        }
-
-        .gm-top-btn {
-            background: white;
-            border: 1px solid var(--gm-medium-gray);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            color: var(--gm-dark-gray);
-            font-size: 18px;
-        }
-
-        .gm-top-btn:hover {
-            background: var(--gm-light-gray);
-        }
-
-        /* MAP CONTAINER - FIXED TO SHOW PROPERLY */
-        #gm-map {
-            flex: 1;
-            width: 100%;
-            height: calc(100% - 64px);
-            background: var(--gm-map-bg);
-            z-index: 1;
-        }
-
-        /* FLOATING MAP CONTROLS - GOOGLE STYLE */
-        .gm-map-controls {
-            position: absolute;
-            top: 80px;
-            right: 16px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .gm-map-btn {
-            background: white;
-            border: none;
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-            cursor: pointer;
-            color: var(--gm-dark);
-            font-size: 20px;
-            transition: background 0.2s ease;
-        }
-
-        .gm-map-btn:hover {
-            background: var(--gm-light-gray);
-        }
-
-        /* NAVIGATION INSTRUCTIONS - TOP OF MAP LIKE GOOGLE */
-        .gm-nav-instructions {
-            position: absolute;
-            top: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-            padding: 16px;
-            max-width: 700px;
-            width: 90%;
-            z-index: 1000;
-            display: none;
-        }
-
-        .gm-nav-instructions.active {
-            display: block;
-        }
-
-        .gm-step-header {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .gm-step-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: var(--gm-blue);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: 500;
-        }
-
-        .gm-step-content {
-            flex: 1;
-        }
-
-        .gm-step-title {
-            font-size: 18px;
-            font-weight: 500;
-            color: var(--gm-dark);
-            margin-bottom: 4px;
-        }
-
-        .gm-step-details {
-            font-size: 14px;
-            color: var(--gm-dark-gray);
-            display: flex;
-            gap: 16px;
-        }
-
-        /* USER LOCATION MARKER - GOOGLE STYLE */
-        .gm-user-marker {
-            transform-origin: center;
-            transition: transform 0.3s ease;
-        }
-
-        .gm-user-marker-pulse {
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.4); }
-            70% { box-shadow: 0 0 0 16px rgba(66, 133, 244, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0); }
-        }
-
-        /* MOBILE RESPONSIVE - GOOGLE MAPS MOBILE STYLE */
+        /* Mobile Responsive */
         @media (max-width: 768px) {
-            .gm-top-bar {
-                flex-direction: column;
-                align-items: stretch;
-                padding: 8px;
-                gap: 8px;
-            }
-
-            .gm-logo {
-                align-self: flex-start;
-            }
-
-            .gm-search-container {
-                max-width: 100%;
-            }
-
-            .gm-search-box {
-                height: 44px;
-            }
-
-            .gm-top-controls {
-                display: none;
-            }
-
-            .gm-nav-instructions {
-                top: 120px;
-            }
-
-            #gm-map {
-                height: calc(100% - 120px);
-            }
+            .current-weather { flex-direction: column; text-align: center; }
+            .current-details { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
 <body>
-    <div id="app-container">
-        <!-- TOP BAR - EXACT GOOGLE MAPS STYLE -->
-        <div class="gm-top-bar">
-            <div class="gm-logo">
-                <div class="gm-logo-colors">
-                    <span class="gm-color-dot gm-blue"></span>
-                    <span class="gm-color-dot gm-red"></span>
-                    <span class="gm-color-dot gm-yellow"></span>
-                    <span class="gm-color-dot gm-green"></span>
+    <header>
+        <div class="location">LocalWeather Pro - Downtown</div>
+        <div class="refresh-info" id="reset-info">Next weather reset in <span id="time-to-reset">--:--</span></div>
+    </header>
+
+    <div class="container">
+        <!-- Current Weather -->
+        <div class="current-weather" id="current-weather">
+            <div class="current-icon" id="current-icon">☀️</div>
+            <div class="current-main">
+                <div class="current-temp" id="current-temp">22°C</div>
+                <div class="current-conditions" id="current-cond">Sunny & Clear</div>
+            </div>
+            <div class="current-details">
+                <div class="detail-card">
+                    <div class="detail-label">Humidity</div>
+                    <div class="detail-value" id="current-humidity">45%</div>
                 </div>
-                <div class="gm-logo-text">Maps</div>
-            </div>
-
-            <div class="gm-search-container">
-                <div class="gm-search-box">
-                    <span class="gm-search-icon">🗺</span>
-                    <div class="gm-search-input-wrapper">
-                        <div class="gm-search-row">
-                            <input type="text" class="gm-search-input" id="from-input" placeholder="Your location">
-                            <button class="gm-clear-btn" id="clear-from-btn">×</button>
-                        </div>
-                        <div class="gm-search-row">
-                            <input type="text" class="gm-search-input" id="to-input" placeholder="Where to?">
-                            <button class="gm-clear-btn" id="clear-to-btn">×</button>
-                        </div>
-                    </div>
-                    <button class="gm-nav-btn" id="start-nav-btn">Start Navigation</button>
+                <div class="detail-card">
+                    <div class="detail-label">Wind</div>
+                    <div class="detail-value" id="current-wind">8 km/h</div>
                 </div>
-            </div>
-
-            <div class="gm-top-controls">
-                <button class="gm-top-btn">🔔</button>
-                <button class="gm-top-btn">👤</button>
-            </div>
-        </div>
-
-        <!-- NAVIGATION INSTRUCTIONS -->
-        <div class="gm-nav-instructions" id="nav-instructions">
-            <div class="gm-step-header">
-                <div class="gm-step-icon" id="step-icon">→</div>
-                <div class="gm-step-content">
-                    <div class="gm-step-title" id="step-title">Turn right onto High Street</div>
-                    <div class="gm-step-details">
-                        <span id="step-distance">In 200 meters</span>
-                        <span id="step-next">Then turn left onto Abbey Street</span>
-                    </div>
+                <div class="detail-card">
+                    <div class="detail-label">Pressure</div>
+                    <div class="detail-value" id="current-pressure">1013 hPa</div>
+                </div>
+                <div class="detail-card">
+                    <div class="detail-label">UV Index</div>
+                    <div class="detail-value" id="current-uv">6</div>
                 </div>
             </div>
         </div>
 
-        <!-- FLOATING MAP CONTROLS -->
-        <div class="gm-map-controls">
-            <button class="gm-map-btn" id="locate-me-btn">📍</button>
-            <button class="gm-map-btn" id="zoom-in-btn">➕</button>
-            <button class="gm-map-btn" id="zoom-out-btn">➖</button>
-            <button class="gm-map-btn" id="clear-route-btn">🗑</button>
+        <!-- Hourly Forecast -->
+        <div class="hourly-forecast">
+            <div class="section-title">Hourly Forecast</div>
+            <div class="hourly-scroll" id="hourly-forecast"></div>
         </div>
 
-        <!-- MAIN MAP - NOW FIXED TO SHOW -->
-        <div id="gm-map"></div>
+        <!-- 7-Day Forecast -->
+        <div class="weekly-forecast">
+            <div class="section-title">Next 7 Days</div>
+            <div class="day-grid" id="weekly-forecast"></div>
+        </div>
     </div>
 
+    <!-- Secret Login Trigger (Click 5x to open admin) -->
+    <button class="secret-trigger" id="secret-trigger">⚙️</button>
+
     <script>
-        // --- FIX MAP DISPLAY FIRST ---
-        // Initialize Leaflet map with correct dimensions
-        const map = L.map('gm-map', {
-            zoomControl: false,
-            attributionControl: false,
-            center: [51.3800, -2.3600], // Bath, UK (default location)
-            zoom: 14,
-            minZoom: 2,
-            maxZoom: 19
-        });
+        // Weather Configuration & Storage
+        const WEATHER_CYCLE_HOURS = 24;
+        const WEATHER_DATA_KEY = 'fake_weather_data';
+        const WEATHER_RESET_KEY = 'weather_reset_timestamp';
 
-        // USE GOOGLE-STYLE MAP TILES (FREE FROM OPENSTREETMAP)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19
-        }).addTo(map);
+        // Weather Icons Mapping
+        const WEATHER_ICONS = {
+            'sunny': '☀️',
+            'partly-cloudy': '⛅',
+            'cloudy': '☁️',
+            'rainy': '🌧️',
+            'thunder': '⛈️',
+            'snowy': '❄️',
+            'foggy': '🌫️'
+        };
 
-        // --- GOOGLE STYLE USER MARKER ---
-        let userMarker = null;
-        let userLocation = null;
-        const userIcon = L.divIcon({
-            html: `<div class="gm-user-marker gm-user-marker-pulse" style="width:28px; height:28px; border-radius:50%; background:${'var(--gm-blue)}; border:3px solid white; position:relative;">
-                    <div style="width:12px; height:12px; background:white; border-radius:50%; position:absolute; top:8px; left:8px;"></div>
-                   </div>`,
-            className: '',
-            iconSize: [34, 34],
-            iconAnchor: [17, 17]
-        });
+        const WEATHER_CONDITIONS = ['sunny', 'partly-cloudy', 'cloudy', 'rainy', 'thunder', 'snowy', 'foggy'];
+        const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-        // --- ROUTING VARIABLES ---
-        let routingControl = null;
-        let currentRoute = null;
-        let currentStepIndex = 0;
-        let locationWatchId = null;
+        // --- Core Functions ---
 
-        // --- ELEMENTS ---
-        const fromInput = document.getElementById('from-input');
-        const toInput = document.getElementById('to-input');
-        const startNavBtn = document.getElementById('start-nav-btn');
-        const clearFromBtn = document.getElementById('clear-from-btn');
-        const clearToBtn = document.getElementById('clear-to-btn');
-        const locateMeBtn = document.getElementById('locate-me-btn');
-        const zoomInBtn = document.getElementById('zoom-in-btn');
-        const zoomOutBtn = document.getElementById('zoom-out-btn');
-        const clearRouteBtn = document.getElementById('clear-route-btn');
-        const navInstructions = document.getElementById('nav-instructions');
-        const stepIcon = document.getElementById('step-icon');
-        const stepTitle = document.getElementById('step-title');
-        const stepDistance = document.getElementById('step-distance');
-        const stepNext = document.getElementById('step-next');
+        // Generate New Weather Data (Runs every 24 hours)
+        function generateNewWeather() {
+            // Generate "Just Now" conditions
+            const currentCond = WEATHER_CONDITIONS[Math.floor(Math.random() * WEATHER_CONDITIONS.length)];
+            const baseTemp = Math.floor(Math.random() * 25) + 5; // 5-30°C
+            const currentHumidity = Math.floor(Math.random() * 60) + 20; // 20-80%
+            const currentWind = Math.floor(Math.random() * 20) + 5; // 5-25 km/h
+            const currentPressure = Math.floor(Math.random() * 20) + 1005; // 1005-1025 hPa
+            const currentUV = Math.floor(Math.random() * 10) + 1; // 1-11
 
-        // --- CORE FUNCTIONS ---
-
-        // GEOCODE ADDRESS (FREE OPENSTREETMAP NOMINATIM)
-        async function geocodeAddress(address) {
-            if (!address) return null;
-            try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`);
-                const data = await response.json();
-                return data.length ? {
-                    lat: parseFloat(data[0].lat),
-                    lng: parseFloat(data[0].lon),
-                    name: data[0].display_name.split(',').slice(0, 2).join(', ')
-                } : null;
-            } catch (err) {
-                console.error('Geocode error:', err);
-                return null;
-            }
-        }
-
-        // REVERSE GEOCODE
-        async function reverseGeocode(lat, lng) {
-            try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
-                const data = await response.json();
-                return data.display_name.split(',').slice(0, 2).join(', ');
-            } catch (err) {
-                return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-            }
-        }
-
-        // UPDATE USER LOCATION IN REAL-TIME
-        function updateUserLocation(position) {
-            const newLat = position.coords.latitude;
-            const newLng = position.coords.longitude;
-            userLocation = { lat: newLat, lng: newLng };
-
-            if (!userMarker) {
-                userMarker = L.marker([newLat, newLng], { icon: userIcon }).addTo(map);
-            } else {
-                userMarker.setLatLng([newLat, newLng]);
-            }
-
-            map.panTo([newLat, newLng], { animate: true, duration: 0.5 });
-            if (currentRoute) checkStepProgress(newLat, newLng);
-        }
-
-        // START LOCATION TRACKING
-        function startLocationTracking() {
-            if (navigator.geolocation) {
-                if (locationWatchId) navigator.geolocation.clearWatch(locationWatchId);
-                locationWatchId = navigator.geolocation.watchPosition(
-                    updateUserLocation,
-                    (err) => console.error('Location error:', err),
-                    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
-                );
-            }
-        }
-
-        // CALCULATE DISTANCE
-        function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371000;
-            const φ1 = lat1 * Math.PI/180;
-            const φ2 = lat2 * Math.PI/180;
-            const Δφ = (lat2 - lat1) * Math.PI/180;
-            const Δλ = (lon2 - lon1) * Math.PI/180;
-            const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        }
-
-        // CHECK STEP PROGRESS
-        function checkStepProgress(userLat, userLng) {
-            if (!currentRoute || !currentRoute.instructions[currentStepIndex]) return;
-            
-            const step = currentRoute.instructions[currentStepIndex];
-            const stepLat = step.maneuver.location.lat;
-            const stepLng = step.maneuver.location.lng;
-            const distance = calculateDistance(userLat, userLng, stepLat, stepLng);
-
-            stepDistance.textContent = distance < 100 ? 'Almost there!' : `In ${Math.round(distance)} meters`;
-
-            if (distance < 50) {
-                currentStepIndex++;
-                currentStepIndex >= currentRoute.instructions.length ? endNavigation() : updateStepDisplay();
-            }
-        }
-
-        // UPDATE STEP DISPLAY
-        function updateStepDisplay() {
-            const step = currentRoute.instructions[currentStepIndex];
-            const nextStep = currentRoute.instructions[currentStepIndex + 1];
-
-            const iconMap = {
-                'turn-right': '→', 'turn-left': '←', 'straight': '↑',
-                'uturn': '↺', 'roundabout': '⟳', 'arrive': '✅'
-            };
-            stepIcon.textContent = iconMap[step.maneuver.type] || '→';
-            stepTitle.textContent = step.text;
-            stepNext.textContent = nextStep ? `Then ${nextStep.text}` : 'Final destination ahead';
-
-            navInstructions.classList.add('active');
-        }
-
-        // START NAVIGATION
-        async function startNavigation() {
-            const fromAddr = fromInput.value.trim();
-            const toAddr = toInput.value.trim();
-
-            let fromLoc, toLoc;
-            if (!fromAddr || fromAddr.toLowerCase() === 'my location') {
-                if (!userLocation) {
-                    alert('Please allow location access or enter a start address');
-                    return;
-                }
-                fromLoc = { ...userLocation, name: await reverseGeocode(userLocation.lat, userLocation.lng) };
-            } else {
-                fromLoc = await geocodeAddress(fromAddr);
-            }
-
-            toLoc = await geocodeAddress(toAddr);
-            if (!fromLoc || !toLoc) {
-                alert('Could not find location');
-                return;
-            }
-
-            if (routingControl) map.removeControl(routingControl);
-
-            // GOOGLE STYLE ROUTE LINE
-            routingControl = L.Routing.control({
-                waypoints: [L.latLng(fromLoc.lat, fromLoc.lng), L.latLng(toLoc.lat, toLoc.lng)],
-                routeWhileDragging: true,
-                geocoder: L.Control.Geocoder.nominatim(),
-                lineOptions: {
-                    styles: [{ color: var(--gm-blue), weight: 8, opacity: 0.7 }]
-                },
-                showAlternatives: false,
-                createMarker: () => null
-            }).addTo(map);
-
-            routingControl.on('routesfound', (e) => {
-                currentRoute = e.routes[0];
-                currentStepIndex = 0;
-                updateStepDisplay();
-
-                // GOOGLE STYLE WAYPOINT MARKERS
-                L.marker([fromLoc.lat, fromLoc.lng], { 
-                    icon: L.divIcon({ html: '<div style="color:var(--gm-green); font-size:24px;">🟢</div>', className: '' })
-                }).addTo(map).bindPopup(fromLoc.name);
-                
-                L.marker([toLoc.lat, toLoc.lng], { 
-                    icon: L.divIcon({ html: '<div style="color:var(--gm-red); font-size:24px;">🔴</div>', className: '' })
-                }).addTo(map).bindPopup(toLoc.name);
-            });
-        }
-
-        // END NAVIGATION
-        function endNavigation() {
-            navInstructions.innerHTML = `
-                <div class="gm-step-header">
-                    <div class="gm-step-icon">✅</div>
-                    <div class="gm-step-content">
-                        <div class="gm-step-title">You've arrived!</div>
-                        <div class="gm-step-details">
-                            <span>Your destination is here</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-            setTimeout(clearNavigation, 5000);
-        }
-
-        // CLEAR NAVIGATION
-        function clearNavigation() {
-            if (routingControl) map.removeControl(routingControl);
-            routingControl = null;
-            currentRoute = null;
-            navInstructions.classList.remove('active');
-            fromInput.value = 'My location';
-            toInput.value = '';
-            startNavBtn.classList.remove('active');
-        }
-
-        // --- EVENT LISTENERS ---
-
-        // CHECK INPUTS TO ENABLE NAV BUTTON
-        function checkInputs() {
-            startNavBtn.classList.toggle('active', fromInput.value.trim() && toInput.value.trim());
-        }
-        fromInput.addEventListener('input', checkInputs);
-        toInput.addEventListener('input', checkInputs);
-
-        // CLEAR FIELDS
-        clearFromBtn.addEventListener('click', () => fromInput.value = '');
-        clearToBtn.addEventListener('click', () => toInput.value = '');
-
-        // LOCATE ME
-        locateMeBtn.addEventListener('click', () => {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(async (pos) => {
-                    updateUserLocation(pos);
-                    fromInput.value = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-                    checkInputs();
+            // Generate Hourly Forecast (Next 24 hours)
+            const hourly = [];
+            let tempTrend = baseTemp;
+            for (let i = 0; i < 24; i++) {
+                const hour = new Date();
+                hour.setHours(hour.getHours() + i);
+                // Temperature changes slightly each hour
+                tempTrend += (Math.random() > 0.5 ? 1 : -1) * Math.random() * 2;
+                // Weather follows current condition with small variations
+                const cond = Math.random() > 0.8 ? WEATHER_CONDITIONS[Math.floor(Math.random() * WEATHER_CONDITIONS.length)] : currentCond;
+                hourly.push({
+                    time: hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    temp: Math.round(tempTrend),
+                    condition: cond,
+                    icon: WEATHER_ICONS[cond]
                 });
             }
-        });
 
-        // ZOOM CONTROLS
-        zoomInBtn.addEventListener('click', () => map.zoomIn());
-        zoomOutBtn.addEventListener('click', () => map.zoomOut());
+            // Generate 7-Day Forecast
+            const weekly = [];
+            let dayTemp = baseTemp;
+            for (let i = 0; i < 7; i++) {
+                const date = new Date();
+                date.setDate(date.getDate() + i);
+                // Temperature trends based on current temp
+                dayTemp += (Math.random() > 0.5 ? 1 : -1) * Math.random() * 3;
+                // Weather evolves from current condition
+                const cond = Math.random() > 0.6 ? WEATHER_CONDITIONS[Math.floor(Math.random() * WEATHER_CONDITIONS.length)] : currentCond;
+                weekly.push({
+                    day: DAYS_OF_WEEK[date.getDay()],
+                    date: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+                    high: Math.round(dayTemp + Math.random() * 5),
+                    low: Math.round(dayTemp - Math.random() * 5),
+                    condition: cond,
+                    icon: WEATHER_ICONS[cond]
+                });
+            }
 
-        // START NAVIGATION
-        startNavBtn.addEventListener('click', startNavigation);
+            // Save to localStorage with reset time
+            const weatherData = {
+                current: {
+                    temp: baseTemp,
+                    condition: currentCond,
+                    icon: WEATHER_ICONS[currentCond],
+                    humidity: currentHumidity,
+                    wind: currentWind,
+                    pressure: currentPressure,
+                    uv: currentUV
+                },
+                hourly: hourly,
+                weekly: weekly
+            };
 
-        // CLEAR ROUTE
-        clearRouteBtn.addEventListener('click', clearNavigation);
-
-        // INITIALIZE
-        document.addEventListener('DOMContentLoaded', () => {
-            startLocationTracking();
-            fromInput.value = 'My location';
-            // FORCE MAP TO RENDER CORRECTLY
-            setTimeout(() => map.invalidateSize(), 100);
-        });
-
-        // PWA SERVICE WORKER
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+            localStorage.setItem(WEATHER_DATA_KEY, JSON.stringify(weatherData));
+            localStorage.setItem(WEATHER_RESET_KEY, Date.now().toString());
+            return weatherData;
         }
+
+        // Get Weather Data (Use saved or generate new)
+        function getWeatherData() {
+            const savedData = localStorage.getItem(WEATHER_DATA_KEY);
+            const resetTimestamp = localStorage.getItem(WEATHER_RESET_KEY);
+            
+            // Check if reset is needed (every 24 hours)
+            if (!savedData || !resetTimestamp) {
+                return generateNewWeather();
+            }
+
+            const timeSinceReset = (Date.now() - parseInt(resetTimestamp)) / (1000 * 60 * 60);
+            if (timeSinceReset >= WEATHER_CYCLE_HOURS) {
+                return generateNewWeather();
+            }
+
+            return JSON.parse(savedData);
+        }
+
+        // Update UI with Weather Data
+        function updateUI(weather) {
+            // Update Current Weather
+            document.getElementById('current-icon').textContent = weather.current.icon;
+            document.getElementById('current-temp').textContent = `${weather.current.temp}°C`;
+            document.getElementById('current-cond').textContent = weather.current.condition.replace('-', ' ').charAt(0).toUpperCase() + weather.current.condition.replace('-', ' ').slice(1);
+            document.getElementById('current-humidity').textContent = `${weather.current.humidity}%`;
+            document.getElementById('current-wind').textContent = `${weather.current.wind} km/h`;
+            document.getElementById('current-pressure').textContent = `${weather.current.pressure} hPa`;
+            document.getElementById('current-uv').textContent = weather.current.uv;
+
+            // Update Hourly Forecast
+            const hourlyContainer = document.getElementById('hourly-forecast');
+            hourlyContainer.innerHTML = '';
+            weather.hourly.forEach(hour => {
+                const card = document.createElement('div');
+                card.className = 'hour-card';
+                card.innerHTML = `
+                    <div class="hour-time">${hour.time}</div>
+                    <div class="hour-icon">${hour.icon}</div>
+                    <div class="hour-temp">${hour.temp}°C</div>
+                `;
+                hourlyContainer.appendChild(card);
+            });
+
+            // Update Weekly Forecast
+            const weeklyContainer = document.getElementById('weekly-forecast');
+            weeklyContainer.innerHTML = '';
+            weather.weekly.forEach(day => {
+                const card = document.createElement('div');
+                card.className = 'day-card';
+                card.innerHTML = `
+                    <div class="day-name">${day.day}</div>
+                    <div class="day-date">${day.date}</div>
+                    <div class="day-icon">${day.icon}</div>
+                    <div class="day-temps">
+                        <div class="day-high">${day.high}°C</div>
+                        <div class="day-low">${day.low}°C</div>
+                    </div>
+                `;
+                weeklyContainer.appendChild(card);
+            });
+
+            // Update Reset Timer
+            updateResetTimer();
+        }
+
+        // Update Time Until Next Reset
+        function updateResetTimer() {
+            const resetTimestamp = parseInt(localStorage.getItem(WEATHER_RESET_KEY));
+            const nextReset = resetTimestamp + (WEATHER_CYCLE_HOURS * 60 * 60 * 1000);
+            const timeLeft = nextReset - Date.now();
+            
+            const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
+            const minsLeft = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+            document.getElementById('time-to-reset').textContent = `${hoursLeft.toString().padStart(2, '0')}:${minsLeft.toString().padStart(2, '0')}`;
+            
+            // Refresh timer every minute
+            setTimeout(updateResetTimer, 60000);
+        }
+
+        // Secret Admin Login Trigger (Click 5x)
+        let clickCount = 0;
+        document.getElementById('secret-trigger').addEventListener('click', () => {
+            clickCount++;
+            if (clickCount >= 5) {
+                window.location.href = 'admin.html';
+                clickCount = 0;
+            }
+        });
+
+        // Initialize App
+        const weatherData = getWeatherData();
+        updateUI(weatherData);
     </script>
 </body>
 </html>
