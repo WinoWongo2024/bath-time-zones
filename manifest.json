@@ -1,11 +1,10 @@
 {
-    "name": "Bath Time Zones",
-    "short_name": "Bath Time",
+    "name": "FreeNav - 100% Free Maps",
+    "short_name": "FreeNav",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#F8F5F0",
-    "theme_color": "#2D5D7B",
-    "scope": "/",
+    "background_color": "#F8FAFC",
+    "theme_color": "#2563EB",
     "icons": [
         {
             "src": "icons/icon-192x192.png",
