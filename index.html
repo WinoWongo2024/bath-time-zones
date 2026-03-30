@@ -93,6 +93,15 @@
         .status-error { background: #f44336; }
         .speed-display { font-weight: bold; color: #81d4fa; }
         .accuracy-display { font-style: italic; }
+        /* Custom compass arrow icon */
+        .compass-arrow {
+            width: 24px;
+            height: 24px;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%232196f3" stroke="%23fff" stroke-width="1"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>');
+            background-size: contain;
+            transform-origin: center;
+            transition: transform 0.1s ease-out;
+        }
     </style>
 </head>
 <body>
@@ -101,6 +110,9 @@
     </div>
     <div id="errorAlert" class="alert hidden">
         <i class="fas fa-exclamation-triangle"></i> <span id="errorText">Could not retrieve your location.</span>
+    </div>
+    <div id="compassAlert" class="alert hidden">
+        <i class="fas fa-compass"></i> Please allow motion/device orientation access to show facing direction!
     </div>
 
     <div class="controls">
@@ -116,6 +128,10 @@
         <div class="control-item">
             <span><i class="fas fa-tachometer-alt"></i> Speed:</span>
             <span id="speedValue" class="speed-display">-- km/h</span>
+        </div>
+        <div class="control-item">
+            <span><i class="fas fa-compass"></i> Facing:</span>
+            <span id="facingValue">--° (--)</span>
         </div>
         <div class="control-item">
             <button id="centerBtn" class="btn"><i class="fas fa-map"></i> Center On Me</button>
@@ -172,10 +188,11 @@
 
         // Global variables
         let locationMarker = null;
-        let locationPath = null;
+        let compassMarker = null;
         let lastUpdateTime = null;
         let updateCounter = 0;
         let watchId = null;
+        let compassWatchId = null;
         const STALE_THRESHOLD_MS = 5 * 60 * 1000;
         const REFRESH_INTERVAL_MS = 1000; // 1 second
 
@@ -189,25 +206,36 @@
         const lastUpdated = document.getElementById('lastUpdated');
         const accuracyValue = document.getElementById('accuracyValue');
         const speedValue = document.getElementById('speedValue');
+        const facingValue = document.getElementById('facingValue');
         const updateCount = document.getElementById('updateCount');
         const centerBtn = document.getElementById('centerBtn');
         const resetBtn = document.getElementById('resetBtn');
+        const compassAlert = document.getElementById('compassAlert');
 
         // Format time for display
         function formatTime(date) {
             return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
-        // Update marker, path and status
+        // Convert degrees to compass direction (N, NE, E, etc.)
+        function degreesToCompass(degrees) {
+            if (degrees === null || isNaN(degrees)) return 'Unknown';
+            const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+            const index = Math.round(degrees / 22.5) % 16;
+            return directions[index];
+        }
+
+        // Update location marker and status
         function updateMarkerStatus(lat, lng) {
             const isStale = lastUpdateTime && (Date.now() - lastUpdateTime) > STALE_THRESHOLD_MS;
             const isOffline = !navigator.onLine;
             const isError = !lat || !lng;
 
-            // Remove existing marker
+            // Remove existing markers
             if (locationMarker) map.removeLayer(locationMarker);
+            if (compassMarker) map.removeLayer(compassMarker);
 
-            // Create marker
+            // Create main location marker (blue = live, black = stale, red = error)
             const markerColor = isError ? '#f44336' : (isStale || isOffline) ? '#000' : '#2196f3';
             locationMarker = L.circleMarker([lat, lng], {
                 radius: 8,
@@ -217,12 +245,14 @@
                 fillOpacity: 0.9
             }).addTo(map).bindPopup('Your location (click to refresh)');
 
-            // Add to path if enabled
-            if (locationPath) {
-                locationPath.addLatLng([lat, lng]);
-            } else {
-                locationPath = L.polyline([[lat, lng]], { color: markerColor, weight: 3, opacity: 0.7 }).addTo(map);
-            }
+            // Create compass arrow marker (positions on top of location marker)
+            compassMarker = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    className: 'compass-arrow',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                })
+            }).addTo(map);
 
             // Update status UI
             statusDot.className = `status-indicator ${
@@ -239,6 +269,18 @@
             } else {
                 locationStatus.textContent = 'Live & updating every second';
             }
+        }
+
+        // Update compass direction
+        function updateCompass(heading) {
+            if (!compassMarker) return;
+            
+            // Rotate the arrow to match heading (0° = North)
+            compassMarker.getElement().style.transform = `rotate(${heading}deg)`;
+            
+            // Update display with degrees and compass direction
+            const direction = degreesToCompass(heading);
+            facingValue.textContent = `${heading.toFixed(1)}° (${direction})`;
         }
 
         // Geocoding: Address from coordinates
@@ -300,7 +342,7 @@
             document.getElementById('errorAlert').classList.add('hidden');
         }
 
-        // Handle errors
+        // Handle location errors
         function handleLocationError(error) {
             document.getElementById('permissionAlert').classList.add('hidden');
             const errorMsg = document.getElementById('errorAlert');
@@ -326,10 +368,22 @@
             console.error('Location error:', error);
         }
 
+        // Handle compass errors
+        function handleCompassError(error) {
+            compassAlert.classList.remove('hidden');
+            if (error.code === error.PERMISSION_DENIED) {
+                compassAlert.textContent = '<i class="fas fa-compass"></i> Motion access denied. Enable it to see facing direction!';
+            } else {
+                compassAlert.textContent = '<i class="fas fa-compass"></i> Compass data unavailable on your device.';
+            }
+            facingValue.textContent = '--° (Unknown)';
+            console.error('Compass error:', error);
+        }
+
         // Start tracking
         function startTracking() {
+            // Location tracking
             if (navigator.geolocation) {
-                // High accuracy, 1-second updates
                 watchId = navigator.geolocation.watchPosition(
                     updateLocationDetails,
                     handleLocationError,
@@ -347,16 +401,58 @@
                 document.getElementById('errorAlert').classList.remove('hidden');
                 document.getElementById('errorText').textContent = 'Your browser does not support location services.';
             }
+
+            // Compass tracking (device orientation)
+            if (window.DeviceOrientationEvent) {
+                // Request permission for motion sensors (required on iOS)
+                if (DeviceOrientationEvent.requestPermission) {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(permissionState => {
+                            if (permissionState === 'granted') {
+                                compassWatchId = window.addEventListener('deviceorientationabsolute', (event) => {
+                                    if (event.webkitCompassHeading !== undefined) {
+                                        // iOS uses webkitCompassHeading (0° = North)
+                                        updateCompass(event.webkitCompassHeading);
+                                    } else if (event.alpha !== null) {
+                                        // Android uses alpha (adjust to 0° = North)
+                                        const heading = (360 - event.alpha) % 360;
+                                        updateCompass(heading);
+                                    }
+                                }, true);
+                                compassAlert.classList.add('hidden');
+                            } else {
+                                handleCompassError({ code: 'PERMISSION_DENIED' });
+                            }
+                        })
+                        .catch(handleCompassError);
+                } else {
+                    // Android/desktop without permission prompt
+                    compassWatchId = window.addEventListener('deviceorientationabsolute', (event) => {
+                        if (event.alpha !== null) {
+                            const heading = (360 - event.alpha) % 360;
+                            updateCompass(heading);
+                        }
+                    }, true);
+                    compassAlert.classList.add('hidden');
+                }
+            } else {
+                handleCompassError({ code: 'UNSUPPORTED' });
+            }
         }
 
         // Reset tracker
         function resetTracker() {
+            // Stop tracking
             if (watchId) navigator.geolocation.clearWatch(watchId);
-            if (locationMarker) map.removeLayer(locationMarker);
-            if (locationPath) map.removeLayer(locationPath);
+            if (compassWatchId) window.removeEventListener('deviceorientationabsolute', compassWatchId);
             
+            // Remove markers
+            if (locationMarker) map.removeLayer(locationMarker);
+            if (compassMarker) map.removeLayer(compassMarker);
+            
+            // Reset variables
             locationMarker = null;
-            locationPath = null;
+            compassMarker = null;
             updateCounter = 0;
             lastUpdateTime = null;
             
@@ -364,6 +460,7 @@
             gpsCoords.textContent = '--, --';
             accuracyValue.textContent = '-- m';
             speedValue.textContent = '-- km/h';
+            facingValue.textContent = '--° (--';
             lastUpdated.textContent = '--:--:--';
             updateCount.textContent = '0';
             address.textContent = 'Loading...';
