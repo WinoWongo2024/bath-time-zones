@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Admin Portal</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        :root {
+            --admin-dark: #111827;
+            --admin-primary: #3B82F6;
+            --admin-danger: #EF4444;
+            --admin-light: #F3F4F6;
+        }
+        body { background: var(--admin-dark); color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; }
+        .login-container, .control-panel { background: rgba(255,255,255,0.1); padding: 2rem; border-radius: 16px; width: 100%; max-width: 500px; }
+        h1 { text-align: center; margin-bottom: 2rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; }
+        input, select, button { width: 100%; padding: 1rem; border-radius: 8px; border: none; font-size: 1rem; }
+        input, select { background: rgba(255,255,255,0.2); color: white; }
+        input::placeholder { color: rgba(255,255,255,0.7); }
+        .login-btn { background: var(--admin-primary); color: white; cursor: pointer; margin-top: 1rem; }
+        .login-btn:hover { background: #2563EB; }
+        .control-panel { display: none; }
+        .impact-note { font-size: 0.8rem; color: var(--admin-primary); margin-top: 0.5rem; }
+        .update-btn { background: var(--admin-primary); color: white; cursor: pointer; margin-top: 1rem; }
+        .update-btn:hover { background: #2563EB; }
+        .reset-btn { background: var(--admin-danger); color: white; cursor: pointer; margin-top: 1rem; }
+        .reset-btn:hover { background: #DC2626; }
+        .back-btn { background: rgba(255,255,255,0.2); color: white; cursor: pointer; margin-top: 1rem; }
+        .back-btn:hover { background: rgba(255,255,255,0.3); }
+        .error-msg { color: var(--admin-danger); text-align: center; margin-bottom: 1rem; display: none; }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div class="login-container" id="login-container">
+        <h1>Weather Admin Portal</h1>
+        <div class="error-msg" id="error-msg">Incorrect password!</div>
+        <div class="form-group">
+            <label for="admin-pass">Admin Password</label>
+            <input type="password" id="admin-pass" placeholder="Enter secret password">
+        </div>
+        <button class="login-btn" id="login-btn">Login</button>
+    </div>
+
+    <!-- Control Panel (Hidden by default) -->
+    <div class="control-panel" id="control-panel">
+        <h1>Weather Control Center</h1>
+        <div class="form-group">
+            <label for="new-temp">Current Temperature (°C)</label>
+            <input type="number" id="new-temp" min="-10" max="40" placeholder="e.g. 22">
+        </div>
+        <div class="form-group">
+            <label for="new-condition">Current Condition</label>
+            <select id="new-condition">
+                <option value="sunny">Sunny</option>
+                <option value="partly-cloudy">Partly Cloudy</option>
+                <option value="cloudy">Cloudy</option>
+                <option value="rainy">Rainy</option>
+                <option value="thunder">Thunderstorms</option>
+                <option value="snowy">Snowy</option>
+                <option value="foggy">Foggy</option>
+            </select>
+            <div class="impact-note">* Changing this will adjust 70% of hourly/weekly forecasts to match</div>
+        </div>
+        <div class="form-group">
+            <label for="new-humidity">Humidity (%)</label>
+            <input type="number" id="new-humidity" min="0" max="100" placeholder="e.g. 45">
+        </div>
+        <div class="form-group">
+            <label for="new-wind">Wind Speed (km/h)</label>
+            <input type="number" id="new-wind" min="0" max="50" placeholder="e.g. 8">
+        </div>
+        <button class="update-btn" id="update-btn">Update Weather</button>
+        <button class="reset-btn" id="reset-btn">Force Full Weather Reset</button>
+        <button class="back-btn" id="back-btn">Return to Weather App</button>
+    </div>
+
+    <script>
+        // Secret Admin Password (Can be changed!)
+        const ADMIN_PASSWORD = 'weatherMaster2024';
+        const WEATHER_DATA_KEY = 'fake_weather_data';
+        const WEATHER_RESET_KEY = 'weather_reset_timestamp';
+        const WEATHER_ICONS = {
+            'sunny': '☀️',
+            'partly-cloudy': '⛅',
+            'cloudy': '☁️',
+            'rainy': '🌧️',
+            'thunder': '⛈️',
+            'snowy': '❄️',
+            'foggy': '🌫️'
+        };
+
+        // Elements
+        const loginContainer = document.getElementById('login-container');
+        const controlPanel = document.getElementById('control-panel');
+        const errorMsg = document.getElementById('error-msg');
+        const adminPass = document.getElementById('admin-pass');
+        const loginBtn = document.getElementById('login-btn');
+        const updateBtn = document.getElementById('update-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const backBtn = document.getElementById('back-btn');
+
+        // Load Current Weather Data
+        function loadCurrentWeather() {
+            const savedData = localStorage.getItem(WEATHER_DATA_KEY);
+            if (savedData) {
+                const weather = JSON.parse(savedData);
+                document.getElementById('new-temp').value = weather.current.temp;
+                document.getElementById('new-condition').value = weather.current.condition;
+                document.getElementById('new-humidity').value = weather.current.humidity;
+                document.getElementById('new-wind').value = weather.current.wind;
+            }
+        }
+
+        // Login Handler
+        loginBtn.addEventListener('click', () => {
+            if (adminPass.value === ADMIN_PASSWORD) {
+                loginContainer.style.display = 'none';
+                controlPanel.style.display = 'block';
+                loadCurrentWeather();
+            } else {
+                errorMsg.style.display = 'block';
+                setTimeout(() => errorMsg.style.display = 'none', 3000);
+            }
+        });
+
+        // Update Weather Handler
+        updateBtn.addEventListener('click', () => {
+            const savedData = localStorage.getItem(WEATHER_DATA_KEY);
+            if (!savedData) return;
+
+            const weather = JSON.parse(savedData);
+            const newTemp = parseInt(document.getElementById('new-temp').value);
+            const newCond = document.getElementById('new-condition').value;
+            const newHumidity = parseInt(document.getElementById('new-humidity').value);
+            const newWind = parseInt(document.getElementById('new-wind').value);
+
+            // Update Current Weather
+            weather.current.temp = newTemp;
+            weather.current.condition = newCond;
+            weather.current.icon = WEATHER_ICONS[newCond];
+            weather.current.humidity = newHumidity;
+            weather.current.wind = newWind;
+
+            // Update Hourly Forecast (70% match new condition)
+            weather.hourly.forEach(hour => {
+                if (Math.random() > 0.3) {
+                    hour.condition = newCond;
+                    hour.icon = WEATHER_ICONS[newCond];
+                }
+                // Adjust temperature around new base
+                hour.temp = Math.round(newTemp + (Math.random() > 0.5 ? 1 : -1) * Math.random() * 5);
+            });
+
+            // Update Weekly Forecast (70% match new condition)
+            weather.weekly.forEach(day => {
+                if (Math.random() > 0.3) {
+                    day.condition = newCond;
+                    day.icon = WEATHER_ICONS[newCond];
+                }
+                // Adjust temps around new base
+                day.high = Math.round(newTemp + Math.random() * 5);
+                day.low = Math.round(newTemp - Math.random() * 5);
+            });
+
+            // Save Updated Data
+            localStorage.setItem(WEATHER_DATA_KEY, JSON.stringify(weather));
+            alert('Weather updated successfully!');
+        });
+
+        // Force Reset Handler
+        resetBtn.addEventListener('click', () => {
+            if (confirm('Are you sure? This will generate entirely new weather data!')) {
+                localStorage.removeItem(WEATHER_DATA_KEY);
+                localStorage.removeItem(WEATHER_RESET_KEY);
+                alert('Weather reset complete!');
+                loadCurrentWeather();
+            }
+        });
+
+        // Back to App
+        backBtn.addEventListener('click', () => {
+            window.location.href = 'index.html';
+        });
+
+        // Allow Enter Key for Login
+        adminPass.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loginBtn.click();
+        });
+    </script>
+</body>
+</html>
