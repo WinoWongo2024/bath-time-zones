@@ -3,420 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bath Live Bus Stop Announcer</title>
+    <title>My Location Map</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <!-- Custom Styles -->
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Courier New', Courier, monospace;
-        }
-
-        body {
-            background: #222;
-            color: #fff;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-        }
-
-        /* HUGE CENTERED SCROLLING LED DISPLAY */
-        .led-container {
-            width: 95%;
-            max-width: 1400px;
-            margin: 20px auto;
-            display: flex;
-            justify-content: center;
-        }
-
-        .led-board {
-            background: #050505;
-            border: 10px solid #555;
-            border-radius: 15px;
-            padding: 40px 25px;
-            width: 100%;
-            min-height: 220px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 0 40px rgba(0,255,0,0.25);
-        }
-
-        .led-text {
-            color: #00ff00;
-            font-size: 52px;
-            font-weight: bold;
-            letter-spacing: 5px;
-            text-align: center;
-            white-space: nowrap;
-            overflow: hidden;
-            position: relative;
-            text-shadow: 0 0 10px #00ff00;
-        }
-
-        /* LIVE STATUS BADGE */
-        .live-badge {
-            background: #ff3333;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.6; }
-            100% { opacity: 1; }
-        }
-
-        /* NEARBY STOPS SECTION */
-        .stops-section {
-            width: 95%;
-            max-width: 1200px;
-            margin-top: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .stops-heading {
-            font-size: 32px;
-            margin-bottom: 15px;
-            color: #00ff00;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .stops-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 18px;
-            width: 100%;
-        }
-
-        .stop-card {
-            background: #1a1a1a;
-            border: 3px solid #333;
-            border-radius: 10px;
-            padding: 25px;
-            text-align: center;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .stop-card.updating {
-            border-color: #ffaa00;
-            box-shadow: 0 0 12px rgba(255,170,0,0.3);
-        }
-
-        .stop-card.active {
-            border-color: #00ff00;
-            box-shadow: 0 0 15px rgba(0,255,0,0.4);
-        }
-
-        .stop-name {
-            font-size: 24px;
-            margin-bottom: 12px;
-            color: #00ff00;
-            word-wrap: break-word;
-        }
-
-        .stop-distance {
-            font-size: 20px;
-            color: #fff;
-            font-weight: bold;
-        }
-
-        .last-updated {
-            font-size: 14px;
-            color: #ccc;
-            margin-top: 10px;
-        }
-
-        /* STATUS STYLES */
-        .status-text {
-            font-size: 32px;
-            color: #ff4444;
-            text-align: center;
-            margin-top: 50px;
-        }
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .alert { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
-    <div class="led-container">
-        <div class="led-board">
-            <div class="led-text" id="ledDisplay">INITIALIZING LIVE SYSTEM...</div>
-        </div>
+    <div id="permissionAlert" class="alert">
+        Please allow location access to view your position on the map!
     </div>
-
-    <div class="stops-section" id="stopsContainer" style="display: none;">
-        <div class="stops-heading">
-            <span class="live-badge">LIVE</span>
-            NEARBY BUS STOPS
-        </div>
-        <div class="stops-grid" id="stopsGrid"></div>
+    <div id="errorAlert" class="alert hidden">
+        Could not retrieve your location. Please check your settings.
     </div>
+    <div id="map"></div>
 
-    <div class="status-text" id="statusMessage"></div>
-
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
     <script>
-        const ledDisplay = document.getElementById('ledDisplay');
-        const stopsContainer = document.getElementById('stopsContainer');
-        const stopsGrid = document.getElementById('stopsGrid');
-        const statusMessage = document.getElementById('statusMessage');
+        // Initialize map (centered on a default location first)
+        const map = L.map('map').setView([51.505, -0.09], 13);
 
-        // CONFIG SETTINGS
-        const BATH_BOUNDS = { minLat: 51.37, maxLat: 51.42, minLon: -2.41, maxLon: -2.34 };
-        const SEARCH_RADIUS = 1000; // 1km radius
-        const UPDATE_INTERVAL = 5000; // Refresh every 5 seconds
-        const MAX_STOPS = 20;
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
 
-        let lastKnownLat = null;
-        let lastKnownLon = null;
-        let stopElements = new Map(); // Track stop cards for updates
-
-        // ------------------------------
-        // LED SCROLL FUNCTION (CENTERED & SMOOTH)
-        // ------------------------------
-        function scrollLedText(fullText) {
-            const displayText = `   ${fullText.toUpperCase()}   `;
-            let position = 0;
-            const charWidth = 32;
-            const displayWidth = ledDisplay.offsetWidth;
-            const textWidth = displayText.length * charWidth;
-
-            if (window.scrollInterval) clearInterval(window.scrollInterval);
-
-            // Static centered text if it fits
-            if (textWidth <= displayWidth) {
-                ledDisplay.textContent = displayText.trim();
-                return;
-            }
-
-            // Smooth scrolling
-            window.scrollInterval = setInterval(() => {
-                position = (position + 1) % displayText.length;
-                const visibleChars = Math.floor(displayWidth / charWidth);
-                let start = position;
-                let end = start + visibleChars;
-                
-                let visibleText = displayText.substring(start, end);
-                if (end > displayText.length) {
-                    visibleText += displayText.substring(0, end - displayText.length);
-                }
-
-                ledDisplay.textContent = visibleText;
-            }, 120);
-        }
-
-        // ------------------------------
-        // GET & UPDATE USER LOCATION
-        // ------------------------------
-        function startLiveUpdates() {
-            // Initial location fetch
-            getUserLocation();
-            
-            // Repeat every UPDATE_INTERVAL milliseconds
-            setInterval(getUserLocation, UPDATE_INTERVAL);
-        }
-
-        function getUserLocation() {
-            if (!navigator.geolocation) {
-                statusMessage.textContent = "Geolocation not supported by your browser";
-                scrollLedText("GEOLOCATION UNAVAILABLE");
-                return;
-            }
-
+        // Request location permissions
+        if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
-                position => {
-                    lastKnownLat = position.coords.latitude;
-                    lastKnownLon = position.coords.longitude;
-                    updateNearbyStops();
+                (position) => {
+                    // Hide alerts
+                    document.getElementById('permissionAlert').classList.add('hidden');
+                    document.getElementById('errorAlert').classList.add('hidden');
+
+                    // Get user coordinates
+                    const userLat = position.coords.latitude;
+                    const userLng = position.coords.longitude;
+
+                    // Center map on user and add marker
+                    map.setView([userLat, userLng], 15);
+                    L.marker([userLat, userLng])
+                        .addTo(map)
+                        .bindPopup('Your current location!')
+                        .openPopup();
                 },
-                error => {
-                    statusMessage.textContent = `Update Error: ${error.message}`;
-                    scrollLedText("LOCATION UPDATE FAILED");
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: UPDATE_INTERVAL }
+                (error) => {
+                    // Handle errors (e.g., user denied permission)
+                    document.getElementById('permissionAlert').classList.add('hidden');
+                    document.getElementById('errorAlert').classList.remove('hidden');
+                    console.error('Location error:', error);
+                }
             );
+        } else {
+            // Browser doesn't support geolocation
+            document.getElementById('permissionAlert').classList.add('hidden');
+            document.getElementById('errorAlert').classList.remove('hidden');
+            document.getElementById('errorAlert').textContent = 'Your browser does not support location services.';
         }
-
-        // ------------------------------
-        // FETCH & UPDATE NEARBY STOPS WITH REAL NAMES
-        // ------------------------------
-        async function updateNearbyStops() {
-            // Check if user is in Bath
-            if (!lastKnownLat || !lastKnownLon || 
-                lastKnownLat < BATH_BOUNDS.minLat || lastKnownLat > BATH_BOUNDS.maxLat || 
-                lastKnownLon < BATH_BOUNDS.minLon || lastKnownLon > BATH_BOUNDS.maxLon) {
-                scrollLedText("OUTSIDE BATH AREA - NO UPDATES");
-                statusMessage.textContent = "Please move to Bath for live stop data";
-                return;
-            }
-
-            scrollLedText("UPDATING NEARBY STOPS...");
-            statusMessage.textContent = "";
-
-            try {
-                // FIRST: Use targeted Overpass API query for Bath bus stops (gives real names)
-                const overpassQuery = `
-                    [out:json][timeout:25];
-                    (
-                      node["highway"="bus_stop"]["name"](around:${SEARCH_RADIUS},${lastKnownLat},${lastKnownLon});
-                      way["highway"="bus_stop"]["name"](around:${SEARCH_RADIUS},${lastKnownLat},${lastKnownLon});
-                      relation["highway"="bus_stop"]["name"](around:${SEARCH_RADIUS},${lastKnownLat},${lastKnownLon});
-                    );
-                    out body;
-                    >;
-                    out skel qt;
-                `;
-
-                const response = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`);
-                const data = await response.json();
-                let stops = [];
-
-                // Process results to get named stops
-                if (data.elements.length > 0) {
-                    stops = data.elements.map(element => {
-                        // Get stop name (prioritize official name tags)
-                        const stopName = element.tags.name || 
-                                         element.tags["public_transport:name"] || 
-                                         element.tags["name:en"] || 
-                                         "Unnamed Bus Stop";
-                        
-                        // Get coordinates
-                        let lat = element.lat;
-                        let lon = element.lon;
-                        if (!lat && element.center) {
-                            lat = element.center.lat;
-                            lon = element.center.lon;
-                        }
-
-                        return {
-                            id: element.id.toString(),
-                            name: stopName,
-                            lat: lat,
-                            lon: lon
-                        };
-                    }).filter(stop => stop.lat && stop.lon); // Remove invalid entries
-                }
-
-                // BACKUP: If Overpass returns few stops, use Nominatim with better filtering
-                if (stops.length < 3) {
-                    const nominatimResponse = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=bus+stop&lat=${lastKnownLat}&lon=${lastKnownLon}&radius=${SEARCH_RADIUS}&limit=${MAX_STOPS}&extratags=1`);
-                    const nominatimStops = await response.json();
-
-                    nominatimStops.forEach(stop => {
-                        // Extract proper name from display_name or extratags
-                        const nameParts = stop.display_name.split(',');
-                        const stopName = stop.extratags?.name || 
-                                         nameParts[0].replace(/Bus stop:?/i, '').trim() || 
-                                         nameParts[0].trim() || 
-                                         "Unnamed Bus Stop";
-
-                        if (!stops.some(s => s.id === stop.place_id)) {
-                            stops.push({
-                                id: stop.place_id,
-                                name: stopName,
-                                lat: parseFloat(stop.lat),
-                                lon: parseFloat(stop.lon)
-                            });
-                        }
-                    });
-                }
-
-                // Limit to max stops and remove duplicates
-                stops = [...new Map(stops.map(s => [s.id, s])).values()].slice(0, MAX_STOPS);
-
-                if (stops.length === 0) {
-                    scrollLedText("NO NEARBY STOPS FOUND");
-                    stopsContainer.style.display = "none";
-                    return;
-                }
-
-                stopsContainer.style.display = "flex";
-                scrollLedText(`LIVE: ${stops.length} NAMED STOPS NEAR YOU`);
-
-                // Update or create stop cards
-                stops.forEach(stop => {
-                    const currentDistance = calculateDistance(lastKnownLat, lastKnownLon, stop.lat, stop.lon);
-                    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-                    // If stop already exists - update its data
-                    if (stopElements.has(stop.id)) {
-                        const card = stopElements.get(stop.id);
-                        card.classList.add('updating');
-                        
-                        // Update distance and timestamp
-                        card.querySelector('.stop-distance').textContent = `${currentDistance.toFixed(1)}m away`;
-                        card.querySelector('.last-updated').textContent = `Updated: ${now}`;
-                        
-                        // Remove update highlight after 1 second
-                        setTimeout(() => card.classList.remove('updating'), 1000);
-                        return;
-                    }
-
-                    // If new stop - create card
-                    const stopCard = document.createElement('div');
-                    stopCard.className = "stop-card";
-                    stopCard.innerHTML = `
-                        <div class="stop-name">${stop.name}</div>
-                        <div class="stop-distance">${currentDistance.toFixed(1)}m away</div>
-                        <div class="last-updated">Updated: ${now}</div>
-                    `;
-                    
-                    // Highlight when clicked
-                    stopCard.addEventListener('click', () => {
-                        document.querySelectorAll('.stop-card').forEach(c => c.classList.remove('active'));
-                        stopCard.classList.add('active');
-                        scrollLedText(`CURRENT FOCUS: ${stop.name}`);
-                    });
-
-                    stopsGrid.appendChild(stopCard);
-                    stopElements.set(stop.id, stopCard);
-                });
-
-                // Remove stops that are no longer in range
-                stopElements.forEach((card, id) => {
-                    const stillExists = stops.some(stop => stop.id === id);
-                    if (!stillExists) {
-                        card.remove();
-                        stopElements.delete(id);
-                    }
-                });
-
-            } catch (err) {
-                scrollLedText("STOP UPDATE FAILED");
-                statusMessage.textContent = "Could not refresh stop data";
-                console.error(err);
-            }
-        }
-
-        // ------------------------------
-        // DISTANCE CALCULATION (ACCURATE)
-        // ------------------------------
-        function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371000; // Earth radius in meters
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = 
-                Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-                Math.sin(dLon/2) * Math.sin(dLon/2); 
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-            return R * c;
-        }
-
-        // ------------------------------
-        // START LIVE SYSTEM ON LOAD
-        // ------------------------------
-        window.addEventListener('load', startLiveUpdates);
     </script>
 </body>
 </html>
