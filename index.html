@@ -2,327 +2,112 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bath Personal Bus System</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="icon" href="icons/icon-192x192.png" type="image/png">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <title>Bath Personal Announcement System</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', sans-serif; }
-        :root {
-            --bus-blue: #005EB8;
-            --bus-yellow: #FFD700;
-            --bus-dark: #202124;
-            --bus-light: #F8F9FA;
-        }
-
-        body {
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-            background: #000;
-            color: var(--bus-light);
-            position: relative;
-        }
-
-        /* Camera Background */
-        #camera-view {
-            width: 100%;
-            height: 100%;
-            background: url('https://picsum.photos/id/1016/1920/1080') center/cover no-repeat;
-            filter: brightness(0.7);
-            position: absolute;
-            top: 0; left: 0;
-            z-index: 1;
-        }
-
-        /* Floating Stops */
-        .bus-stop {
-            position: absolute;
-            background: rgba(0,0,0,0.9);
-            border: 2px solid var(--bus-yellow);
-            border-radius: 8px;
-            padding: 0.8rem;
-            z-index: 10;
-            max-width: 200px;
-            transition: all 0.5s ease;
-        }
-
-        .stop-name {
-            font-weight: 700;
-            color: var(--bus-yellow);
-            font-size: 1rem;
-        }
-
-        .stop-distance {
-            font-size: 0.8rem;
-            margin: 0.3rem 0;
-        }
-
-        .stop-type {
-            font-size: 0.7rem;
-            color: #ccc;
-        }
-
-        /* Announcement Board */
-        #announcement-board {
-            position: fixed;
-            bottom: 2rem;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--bus-blue);
-            border: 2px solid var(--bus-yellow);
-            border-radius: 12px;
-            padding: 1.5rem;
-            width: 90%;
-            max-width: 600px;
-            z-index: 100;
+        /* LED-style display */
+        .led-board {
+            background: #111;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 24px;
+            padding: 15px;
+            border: 3px solid #555;
+            margin: 20px 0;
+            min-height: 60px;
             text-align: center;
+            letter-spacing: 2px;
         }
-
-        #announce-text {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
+        /* Location buttons (our "pins") */
+        .location-pins {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
         }
-
-        #announce-sub {
-            font-size: 1rem;
-            opacity: 0.9;
-        }
-
-        /* Zone Labels */
-        #zone-label {
-            position: fixed;
-            top: 1rem;
-            left: 1rem;
-            background: rgba(0,0,0,0.8);
-            border: 1px solid var(--bus-yellow);
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            z-index: 100;
-        }
-
-        /* Control Bar */
-        #control-bar {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            z-index: 100;
-        }
-
-        .control-btn {
-            background: var(--bus-blue);
-            border: none;
+        .pin-button {
+            padding: 12px;
+            background: #2c3e50;
             color: white;
-            padding: 0.8rem 1rem;
-            border-radius: 8px;
-            margin-left: 0.5rem;
+            border: none;
+            border-radius: 4px;
             cursor: pointer;
+            transition: background 0.3s;
+        }
+        .pin-button:hover {
+            background: #34495e;
+        }
+        .pin-button.active {
+            background: #e67e22;
         }
     </style>
 </head>
 <body>
-    <div id="camera-view"></div>
-    <div id="zone-label">Zone: Central Bath</div>
-    <div id="announcement-board">
-        <div id="announce-text">Next Stop: Bath Abbey</div>
-        <div id="announce-sub">Approaching in 200 meters</div>
-    </div>
-    <div id="control-bar">
-        <button class="control-btn" id="toggle-audio">🔊 Audio On</button>
-        <button class="control-btn" id="reset">🔄 Reset</button>
-    </div>
+    <h1>Bath Personal Announcement System</h1>
+    <div class="led-board" id="ledDisplay">READY - SELECT LOCATION</div>
+    <div class="location-pins" id="locationContainer"></div>
 
     <script>
-        // --- FULL BATH STOP DATABASE (50+ STOPS!) ---
-        const BATH_STOPS = {
-            // NORTH BATH ZONE
-            'North Bath': [
-                { name: 'Bathampton Village', lat: 51.4150, lng: -2.3820, type: 'Village' },
-                { name: 'Upper Weston', lat: 51.4020, lng: -2.3650, type: 'Residential' },
-                { name: 'North Parade Gardens', lat: 51.3880, lng: -2.3620, type: 'Park' },
-                { name: 'Claverton Down Road', lat: 51.3950, lng: -2.3480, type: 'Road' },
-                { name: 'Bath University Campus', lat: 51.3980, lng: -2.3420, type: 'Education' },
-                { name: 'Cleveland Pools', lat: 51.4010, lng: -2.3580, type: 'Leisure' },
-                { name: 'Hampton Row', lat: 51.3900, lng: -2.3600, type: 'Residential' },
-                { name: 'Royal Crescent', lat: 51.3870, lng: -2.3630, type: 'Landmark' },
-                { name: 'Victoria Park', lat: 51.4050, lng: -2.3700, type: 'Park' }
-            ],
-            // CENTRAL BATH ZONE
-            'Central Bath': [
-                { name: 'Bath Abbey', lat: 51.3809, lng: -2.3609, type: 'Landmark' },
-                { name: 'Guildhall Market', lat: 51.3790, lng: -2.3630, type: 'Market' },
-                { name: 'Queen Square', lat: 51.3780, lng: -2.3650, type: 'Square' },
-                { name: 'Milsom Street', lat: 51.3770, lng: -2.3620, type: 'Shopping' },
-                { name: 'Bath Guildhall', lat: 51.3800, lng: -2.3620, type: 'Landmark' },
-                { name: 'The Roman Baths', lat: 51.3810, lng: -2.3620, type: 'Historic' },
-                { name: 'Thermae Bath Spa', lat: 51.3810, lng: -2.3660, type: 'Leisure' },
-                { name: 'SouthGate Centre', lat: 51.3750, lng: -2.3610, type: 'Shopping' },
-                { name: 'St James Parade', lat: 51.3830, lng: -2.3600, type: 'Road' }
-            ],
-            // WEST BATH ZONE
-            'West Bath': [
-                { name: 'Twerton High Street', lat: 51.3720, lng: -2.3780, type: 'Road' },
-                { name: 'Oldfield Park Station', lat: 51.3850, lng: -2.3750, type: 'Transport' },
-                { name: 'Westbury Gardens', lat: 51.3880, lng: -2.3800, type: 'Park' },
-                { name: 'Bath Rugby Stadium', lat: 51.3740, lng: -2.3850, type: 'Sport' },
-                { name: 'Weston Library', lat: 51.3950, lng: -2.3700, type: 'Education' },
-                { name: 'Millbrook Inn', lat: 51.3700, lng: -2.3820, type: 'Food' },
-                { name: 'Weston Park', lat: 51.3900, lng: -2.3750, type: 'Park' }
-            ],
-            // EAST BATH ZONE
-            'East Bath': [
-                { name: 'Larkhall Village', lat: 51.3720, lng: -2.3520, type: 'Village' },
-                { name: 'Combe Down Hill', lat: 51.3700, lng: -2.3450, type: 'Park' },
-                { name: 'Monkton Combe School', lat: 51.3650, lng: -2.3350, type: 'Education' },
-                { name: 'Hampton Row', lat: 51.3920, lng: -2.3580, type: 'Residential' },
-                { name: 'Bathwick Hill', lat: 51.3950, lng: -2.3500, type: 'Road' },
-                { name: 'Alexandra Park', lat: 51.3900, lng: -2.3550, type: 'Park' }
-            ],
-            // SOUTH BATH ZONE
-            'South Bath': [
-                { name: 'Odd Down Estate', lat: 51.3650, lng: -2.3600, type: 'Residential' },
-                { name: 'Peasedown St John', lat: 51.3500, lng: -2.3200, type: 'Village' },
-                { name: 'Southdown Lane', lat: 51.3680, lng: -2.3650, type: 'Road' },
-                { name: 'Moorlands Park', lat: 51.3600, lng: -2.3700, type: 'Park' },
-                { name: 'Bath Spa Station', lat: 51.3660, lng: -2.3620, type: 'Transport' },
-                { name: 'Odd Down Sports Ground', lat: 51.3600, lng: -2.3500, type: 'Sport' }
-            ],
-            // ADDITIONAL SPOTS
-            'Hidden Spots': [
-                { name: 'Jane Austen Centre', lat: 51.3770, lng: -2.3630, type: 'Historic' },
-                { name: 'Pulteney Bridge', lat: 51.3820, lng: -2.3580, type: 'Landmark' },
-                { name: 'Bath Skyline Walk', lat: 51.3900, lng: -2.3400, type: 'Trail' },
-                { name: 'Sally Lunn\'s House', lat: 51.3760, lng: -2.3640, type: 'Food' },
-                { name: 'Bath Farmers Market', lat: 51.3800, lng: -2.3650, type: 'Market' }
-            ]
-        };
+        // 50+ Bath locations (we'll list a few here, easy to expand)
+        const bathLocations = [
+            { id: 1, name: "BATH ABBEY", audio: "https://example.com/audio/abbey.mp3" },
+            { id: 2, name: "ROMAN BATHS", audio: "https://example.com/audio/roman-baths.mp3" },
+            { id: 3, name: "ROYAL CRESCENT", audio: "https://example.com/audio/royal-crescent.mp3" },
+            { id: 4, name: "PULTENEY BRIDGE", audio: "https://example.com/audio/pulteney.mp3" },
+            { id: 5, name: "BATH SPA STATION", audio: "https://example.com/audio/spa-station.mp3" },
+            // Add 50+ more locations here!
+            { id: 55, name: "MENDIP HILLS VIEW", audio: "https://example.com/audio/mendip.mp3" }
+        ];
 
-        // --- CORE FUNCTIONS ---
-        let userLoc = null;
-        let audioEnabled = true;
-        const synth = window.speechSynthesis;
+        const ledDisplay = document.getElementById('ledDisplay');
+        const locationContainer = document.getElementById('locationContainer');
+        let currentAudio = null;
 
-        // Calculate Distance
-        function calcDist(lat1, lon1, lat2, lon2) {
-            const R = 6371000;
-            const φ1 = lat1 * Math.PI/180;
-            const φ2 = lat2 * Math.PI/180;
-            const Δφ = (lat2-lat1)*Math.PI/180;
-            const Δλ = (lon2-lon1)*Math.PI/180;
-            const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
-            return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
-        }
-
-        // Create Floating Stop
-        function createStop(stop) {
-            const el = document.createElement('div');
-            el.className = 'bus-stop';
-            
-            // Random screen position based on zone
-            const zonePos = {
-                'North Bath': { top: `${10 + Math.random()*30}%`, left: `${10 + Math.random()*20}%` },
-                'Central Bath': { top: `${30 + Math.random()*30}%`, left: `${40 + Math.random()*20}%` },
-                'West Bath': { top: `${20 + Math.random()*40}%`, left: `${5 + Math.random()*15}%` },
-                'East Bath': { top: `${20 + Math.random()*40}%`, left: `${70 + Math.random()*20}%` },
-                'South Bath': { top: `${60 + Math.random()*30}%`, left: `${20 + Math.random()*60}%` },
-                'Hidden Spots': { top: `${15 + Math.random()*70}%`, left: `${10 + Math.random()*80}%` }
-            };
-
-            // Get zone for stop
-            let stopZone = Object.keys(BATH_STOPS).find(zone => BATH_STOPS[zone].includes(stop));
-            let pos = zonePos[stopZone] || { top: `${Math.random()*80}%`, left: `${Math.random()*80}%` };
-            
-            el.style.top = pos.top;
-            el.style.left = pos.left;
-            el.innerHTML = `
-                <div class="stop-name">${stop.name}</div>
-                <div class="stop-distance">Calculating...</div>
-                <div class="stop-type">${stop.type}</div>
-            `;
-
-            document.getElementById('camera-view').appendChild(el);
-            return { el, stop };
-        }
-
-        // Update All Stops
-        function updateStops() {
-            if (!userLoc) return;
-
-            document.querySelectorAll('.bus-stop').forEach((el, idx) => {
-                const stop = Object.values(BATH_STOPS).flat()[idx];
-                const dist = calcDist(userLoc.lat, userLoc.lng, stop.lat, stop.lng);
-                
-                // Update distance text
-                el.querySelector('.stop-distance').textContent = 
-                    dist < 1000 ? `${dist}m away` : `${(dist/1000).toFixed(1)}km away`;
-
-                // Animate close stops
-                if (dist < 200) el.style.transform = 'scale(1.1)';
-                else el.style.transform = 'scale(1)';
-
-                // Trigger announcement when close
-                if (dist < 150 && !stop.announced) {
-                    announce(`Next stop: ${stop.name}. Approaching now.`);
-                    stop.announced = true;
-                    document.getElementById('announce-text').textContent = `Next Stop: ${stop.name}`;
-                    document.getElementById('announce-sub').textContent = `Just ${dist} meters ahead`;
-                }
+        // Create all "pin" buttons
+        function setupPins() {
+            bathLocations.forEach(location => {
+                const button = document.createElement('button');
+                button.className = 'pin-button';
+                button.textContent = location.name;
+                button.addEventListener('click', () => activatePin(location));
+                locationContainer.appendChild(button);
             });
         }
 
-        // Text-to-Speech
-        function announce(text) {
-            if (!audioEnabled) return;
-            const utter = new SpeechSynthesisUtterance(text);
-            utter.rate = 0.9;
-            synth.speak(utter);
-        }
-
-        // Track User Location
-        function trackUser() {
-            navigator.geolocation.watchPosition(pos => {
-                userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                document.getElementById('zone-label').textContent = `Zone: ${getZone(userLoc)}`;
-                updateStops();
-            }, err => console.error(err), { enableHighAccuracy: true });
-        }
-
-        // Get User Zone
-        function getZone(loc) {
-            if (loc.lat > 51.39) return 'North Bath';
-            if (loc.lat < 51.37) return 'South Bath';
-            if (loc.lng < -2.37) return 'West Bath';
-            if (loc.lng > -2.35) return 'East Bath';
-            return 'Central Bath';
-        }
-
-        // Initialize
-        function init() {
-            // Create all stops
-            Object.values(BATH_STOPS).flat().forEach(stop => createStop(stop));
+        // Activate selected pin - show on display and play audio
+        function activatePin(location) {
+            // Stop any playing audio
+            if (currentAudio) currentAudio.pause();
             
-            // Track user
-            trackUser();
+            // Update LED display with scrolling effect
+            updateLedDisplay(location.name);
             
-            // Update every second
-            setInterval(updateStops, 1000);
+            // Play announcement
+            currentAudio = new Audio(location.audio);
+            currentAudio.play();
 
-            // Audio toggle
-            document.getElementById('toggle-audio').addEventListener('click', () => {
-                audioEnabled = !audioEnabled;
-                this.textContent = audioEnabled ? '🔊 Audio On' : '🔊 Audio Off';
-            });
-
-            // Reset button
-            document.getElementById('reset').addEventListener('click', () => {
-                window.location.reload();
-            });
+            // Highlight active button
+            document.querySelectorAll('.pin-button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
         }
 
-        // Start App
-        window.onload = init;
+        // LED-style scrolling text
+        function updateLedDisplay(text) {
+            let position = 0;
+            text = ">>> " + text + " <<<";
+            ledDisplay.textContent = text.substring(position, position + 16);
+            
+            const scrollInterval = setInterval(() => {
+                position++;
+                if (position > text.length - 16) position = 0;
+                ledDisplay.textContent = text.substring(position, position + 16);
+            }, 200);
+
+            // Clear interval after 10 seconds
+            setTimeout(() => clearInterval(scrollInterval), 10000);
+        }
+
+        // Initialize the system
+        setupPins();
     </script>
 </body>
 </html>
