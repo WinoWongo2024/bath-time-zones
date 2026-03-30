@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bath Personal Bus Announcement</title>
+    <title>Bath Live Bus Stop Announcer</title>
     <style>
         * {
             margin: 0;
@@ -22,87 +22,124 @@
             padding: 20px;
         }
 
-        /* HUGE CENTERED LED DISPLAY */
+        /* HUGE CENTERED SCROLLING LED DISPLAY */
         .led-container {
-            width: 90%;
-            max-width: 1200px;
-            margin: 40px auto;
+            width: 95%;
+            max-width: 1400px;
+            margin: 20px auto;
             display: flex;
             justify-content: center;
         }
 
         .led-board {
-            background: #0a0a0a;
-            border: 8px solid #444;
-            border-radius: 12px;
-            padding: 30px 20px;
+            background: #050505;
+            border: 10px solid #555;
+            border-radius: 15px;
+            padding: 40px 25px;
             width: 100%;
-            min-height: 200px;
+            min-height: 220px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 0 30px rgba(0,255,0,0.2);
+            box-shadow: 0 0 40px rgba(0,255,0,0.25);
         }
 
         .led-text {
             color: #00ff00;
-            font-size: 48px;
+            font-size: 52px;
             font-weight: bold;
-            letter-spacing: 4px;
+            letter-spacing: 5px;
             text-align: center;
             white-space: nowrap;
             overflow: hidden;
             position: relative;
+            text-shadow: 0 0 10px #00ff00;
+        }
+
+        /* LIVE STATUS BADGE */
+        .live-badge {
+            background: #ff3333;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
         }
 
         /* NEARBY STOPS SECTION */
         .stops-section {
-            width: 90%;
-            max-width: 1000px;
-            margin-top: 20px;
+            width: 95%;
+            max-width: 1200px;
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         .stops-heading {
-            font-size: 28px;
-            margin-bottom: 20px;
-            text-align: center;
+            font-size: 32px;
+            margin-bottom: 15px;
             color: #00ff00;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .stops-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 18px;
+            width: 100%;
         }
 
         .stop-card {
             background: #1a1a1a;
-            border: 2px solid #333;
-            border-radius: 8px;
-            padding: 20px;
+            border: 3px solid #333;
+            border-radius: 10px;
+            padding: 25px;
             text-align: center;
             transition: all 0.3s ease;
-            cursor: pointer;
+            position: relative;
         }
 
-        .stop-card:hover {
+        .stop-card.updating {
+            border-color: #ffaa00;
+            box-shadow: 0 0 12px rgba(255,170,0,0.3);
+        }
+
+        .stop-card.active {
             border-color: #00ff00;
-            box-shadow: 0 0 15px rgba(0,255,0,0.3);
-            transform: translateY(-5px);
+            box-shadow: 0 0 15px rgba(0,255,0,0.4);
         }
 
         .stop-name {
-            font-size: 22px;
-            margin-bottom: 10px;
+            font-size: 24px;
+            margin-bottom: 12px;
             color: #00ff00;
+            word-wrap: break-word;
         }
 
         .stop-distance {
-            font-size: 18px;
-            color: #ccc;
+            font-size: 20px;
+            color: #fff;
+            font-weight: bold;
         }
 
-        /* LOADING/ERROR STYLES */
+        .last-updated {
+            font-size: 14px;
+            color: #ccc;
+            margin-top: 10px;
+        }
+
+        /* STATUS STYLES */
         .status-text {
             font-size: 32px;
             color: #ff4444;
@@ -114,12 +151,15 @@
 <body>
     <div class="led-container">
         <div class="led-board">
-            <div class="led-text" id="ledDisplay">INITIALIZING SYSTEM...</div>
+            <div class="led-text" id="ledDisplay">INITIALIZING LIVE SYSTEM...</div>
         </div>
     </div>
 
     <div class="stops-section" id="stopsContainer" style="display: none;">
-        <h2 class="stops-heading">NEARBY BUS STOPS</h2>
+        <div class="stops-heading">
+            <span class="live-badge">LIVE</span>
+            NEARBY BUS STOPS
+        </div>
         <div class="stops-grid" id="stopsGrid"></div>
     </div>
 
@@ -131,117 +171,170 @@
         const stopsGrid = document.getElementById('stopsGrid');
         const statusMessage = document.getElementById('statusMessage');
 
-        // CONFIG: Focus on Bath area and set search radius (meters)
+        // CONFIG SETTINGS
         const BATH_BOUNDS = { minLat: 51.37, maxLat: 51.42, minLon: -2.41, maxLon: -2.34 };
-        const SEARCH_RADIUS = 1000; // 1km around user
+        const SEARCH_RADIUS = 1000; // 1km radius
+        const UPDATE_INTERVAL = 5000; // Refresh every 5 seconds
+        const MAX_STOPS = 20;
 
-        // SCROLL LED TEXT FUNCTION (CENTERED)
+        let lastKnownLat = null;
+        let lastKnownLon = null;
+        let stopElements = new Map(); // Track stop cards for updates
+
+        // ------------------------------
+        // LED SCROLL FUNCTION (CENTERED & SMOOTH)
+        // ------------------------------
         function scrollLedText(fullText) {
-            // Pad text for smooth looping
             const displayText = `   ${fullText.toUpperCase()}   `;
             let position = 0;
-            const charWidth = 28; // Adjust based on font size
+            const charWidth = 32;
             const displayWidth = ledDisplay.offsetWidth;
             const textWidth = displayText.length * charWidth;
 
-            // Clear any existing intervals
             if (window.scrollInterval) clearInterval(window.scrollInterval);
 
-            // If text fits without scrolling, just center it
+            // Static centered text if it fits
             if (textWidth <= displayWidth) {
                 ledDisplay.textContent = displayText.trim();
                 return;
             }
 
-            // Start scrolling
+            // Smooth scrolling
             window.scrollInterval = setInterval(() => {
-                position++;
-                if (position > displayText.length) position = 0;
+                position = (position + 1) % displayText.length;
+                const visibleChars = Math.floor(displayWidth / charWidth);
+                let start = position;
+                let end = start + visibleChars;
                 
-                // Calculate visible segment
-                const start = position;
-                const end = Math.min(start + Math.floor(displayWidth / charWidth), displayText.length);
                 let visibleText = displayText.substring(start, end);
-                
-                // Add padding to keep centered if needed
-                if (visibleText.length < Math.floor(displayWidth / charWidth)) {
-                    visibleText += displayText.substring(0, Math.floor(displayWidth / charWidth) - visibleText.length);
+                if (end > displayText.length) {
+                    visibleText += displayText.substring(0, end - displayText.length);
                 }
 
                 ledDisplay.textContent = visibleText;
-            }, 150);
+            }, 120);
         }
 
-        // GET USER'S LOCATION
-        function getUserLocation() {
-            scrollLedText("SEARCHING FOR YOUR LOCATION...");
+        // ------------------------------
+        // GET & UPDATE USER LOCATION
+        // ------------------------------
+        function startLiveUpdates() {
+            // Initial location fetch
+            getUserLocation();
             
+            // Repeat every UPDATE_INTERVAL milliseconds
+            setInterval(getUserLocation, UPDATE_INTERVAL);
+        }
+
+        function getUserLocation() {
             if (!navigator.geolocation) {
                 statusMessage.textContent = "Geolocation not supported by your browser";
+                scrollLedText("GEOLOCATION UNAVAILABLE");
                 return;
             }
 
             navigator.geolocation.getCurrentPosition(
-                position => findNearbyStops(position.coords.latitude, position.coords.longitude),
-                error => {
-                    statusMessage.textContent = `Location Error: ${error.message}`;
-                    scrollLedText("UNABLE TO GET LOCATION");
+                position => {
+                    lastKnownLat = position.coords.latitude;
+                    lastKnownLon = position.coords.longitude;
+                    updateNearbyStops();
                 },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                error => {
+                    statusMessage.textContent = `Update Error: ${error.message}`;
+                    scrollLedText("LOCATION UPDATE FAILED");
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: UPDATE_INTERVAL }
             );
         }
 
-        // FIND NEARBY BUS STOPS USING OPENSTREETMAP API
-        async function findNearbyStops(lat, lon) {
-            // Check if user is in Bath area
-            if (lat < BATH_BOUNDS.minLat || lat > BATH_BOUNDS.maxLat || lon < BATH_BOUNDS.minLon || lon > BATH_BOUNDS.maxLon) {
-                scrollLedText("YOU ARE OUTSIDE BATH AREA");
-                statusMessage.textContent = "Please move to Bath to see local stops";
+        // ------------------------------
+        // FETCH & UPDATE NEARBY STOPS
+        // ------------------------------
+        async function updateNearbyStops() {
+            // Check if user is in Bath
+            if (!lastKnownLat || !lastKnownLon || 
+                lastKnownLat < BATH_BOUNDS.minLat || lastKnownLat > BATH_BOUNDS.maxLat || 
+                lastKnownLon < BATH_BOUNDS.minLon || lastKnownLon > BATH_BOUNDS.maxLon) {
+                scrollLedText("OUTSIDE BATH AREA - NO UPDATES");
+                statusMessage.textContent = "Please move to Bath for live stop data";
                 return;
             }
 
-            scrollLedText("FINDING NEARBY BUS STOPS...");
+            scrollLedText("UPDATING NEARBY STOPS...");
             statusMessage.textContent = "";
 
             try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=bus+stop&lat=${lat}&lon=${lon}&radius=${SEARCH_RADIUS}&limit=20`);
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=bus+stop&lat=${lastKnownLat}&lon=${lastKnownLon}&radius=${SEARCH_RADIUS}&limit=${MAX_STOPS}`);
                 const stops = await response.json();
 
                 if (stops.length === 0) {
-                    scrollLedText("NO BUS STOPS FOUND NEAR YOU");
-                    statusMessage.textContent = "Try expanding your search radius";
+                    scrollLedText("NO NEARBY STOPS FOUND");
+                    stopsContainer.style.display = "none";
                     return;
                 }
 
-                // Show stops section and populate cards
-                stopsContainer.style.display = "block";
-                stopsGrid.innerHTML = "";
-                scrollLedText(`FOUND ${stops.length} NEARBY STOPS`);
+                stopsContainer.style.display = "flex";
+                scrollLedText(`LIVE: ${stops.length} STOPS NEAR YOU`);
 
+                // Update or create stop cards
                 stops.forEach(stop => {
-                    // Calculate distance from user (approximate)
-                    const distance = calculateDistance(lat, lon, stop.lat, stop.lon);
+                    const stopId = stop.place_id;
+                    const currentDistance = calculateDistance(lastKnownLat, lastKnownLon, stop.lat, stop.lon);
+                    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                    // If stop already exists - update its data
+                    if (stopElements.has(stopId)) {
+                        const card = stopElements.get(stopId);
+                        card.classList.add('updating');
+                        
+                        // Update distance and timestamp
+                        card.querySelector('.stop-distance').textContent = `${currentDistance.toFixed(1)}m away`;
+                        card.querySelector('.last-updated').textContent = `Updated: ${now}`;
+                        
+                        // Remove update highlight after 1 second
+                        setTimeout(() => card.classList.remove('updating'), 1000);
+                        return;
+                    }
+
+                    // If new stop - create card
                     const stopCard = document.createElement('div');
                     stopCard.className = "stop-card";
                     stopCard.innerHTML = `
                         <div class="stop-name">${stop.display_name.split(',')[0]}</div>
-                        <div class="stop-distance">${distance.toFixed(1)}m away</div>
+                        <div class="stop-distance">${currentDistance.toFixed(1)}m away</div>
+                        <div class="last-updated">Updated: ${now}</div>
                     `;
+                    
+                    // Highlight when clicked
                     stopCard.addEventListener('click', () => {
-                        scrollLedText(`NEXT STOP: ${stop.display_name.split(',')[0]}`);
-                        // Add audio announcement here if needed
+                        document.querySelectorAll('.stop-card').forEach(c => c.classList.remove('active'));
+                        stopCard.classList.add('active');
+                        scrollLedText(`CURRENT FOCUS: ${stop.display_name.split(',')[0]}`);
                     });
+
                     stopsGrid.appendChild(stopCard);
+                    stopElements.set(stopId, stopCard);
+                });
+
+                // Remove stops that are no longer in range
+                stopElements.forEach((card, id) => {
+                    const stillExists = stops.some(stop => stop.place_id === id);
+                    if (!stillExists) {
+                        card.remove();
+                        stopElements.delete(id);
+                    }
                 });
 
             } catch (err) {
-                scrollLedText("ERROR FETCHING STOPS");
-                statusMessage.textContent = "Could not connect to stop database";
+                scrollLedText("STOP UPDATE FAILED");
+                statusMessage.textContent = "Could not refresh stop data";
                 console.error(err);
             }
         }
 
-        // CALCULATE APPROXIMATE DISTANCE BETWEEN COORDINATES
+        // ------------------------------
+        // DISTANCE CALCULATION (ACCURATE)
+        // ------------------------------
         function calculateDistance(lat1, lon1, lat2, lon2) {
             const R = 6371000; // Earth radius in meters
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -251,11 +344,13 @@
                 Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
                 Math.sin(dLon/2) * Math.sin(dLon/2); 
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-            return R * c; // Distance in meters
+            return R * c;
         }
 
-        // INITIALIZE ON PAGE LOAD
-        window.addEventListener('load', getUserLocation);
+        // ------------------------------
+        // START LIVE SYSTEM ON LOAD
+        // ------------------------------
+        window.addEventListener('load', startLiveUpdates);
     </script>
 </body>
 </html>
