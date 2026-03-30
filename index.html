@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moving Road Signs</title>
+    <title>AR Road Signs</title>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon-192x192.png" type="image/png">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
@@ -13,31 +13,42 @@
             height: 100vh; 
             width: 100vw; 
             overflow: hidden; 
-            background: #000; 
-            color: white;
             position: relative;
+            background: #000;
         }
 
-        /* Camera View Background */
-        #camera-view {
+        /* AR Camera Feed Background */
+        #ar-camera {
             width: 100%;
             height: 100%;
-            background: url('https://picsum.photos/id/1016/1920/1080') center/cover no-repeat;
-            filter: brightness(0.8);
-            position: relative;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
         }
 
-        /* Floating Road Signs */
-        .road-sign {
+        #camera-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror feed for natural feel */
+        }
+
+        /* AR Road Signs - Anchored to real directions */
+        .ar-sign {
             position: absolute;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.9);
             border: 2px solid white;
             border-radius: 8px;
             padding: 1rem;
-            transform-origin: center;
-            transition: all 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
             z-index: 10;
-            max-width: 250px;
+            max-width: 200px;
+            transform-origin: center;
+            transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+            opacity: 0;
+        }
+
+        .ar-sign.active {
+            opacity: 1;
         }
 
         .sign-distance {
@@ -48,6 +59,7 @@
 
         .sign-name {
             font-size: 1rem;
+            color: white;
             margin: 0.5rem 0;
         }
 
@@ -56,12 +68,35 @@
             color: #ccc;
         }
 
-        /* Sign Types */
+        /* Sign Types with Unique Icons */
         .sign-type-road { border-left: 4px solid #2196F3; }
+        .sign-type-road::before { content: '🛣️ '; }
+        
         .sign-type-park { border-left: 4px solid #4CAF50; }
+        .sign-type-park::before { content: '🌳 '; }
+        
         .sign-type-shop { border-left: 4px solid #FF9800; }
+        .sign-type-shop::before { content: '🛍️ '; }
+        
         .sign-type-food { border-left: 4px solid #F44336; }
+        .sign-type-food::before { content: '🍔 '; }
+        
         .sign-type-landmark { border-left: 4px solid #9C27B0; }
+        .sign-type-landmark::before { content: '🗺️ '; }
+
+        /* Status Bar */
+        #status-bar {
+            position: fixed;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 24px;
+            z-index: 100;
+            font-size: 0.9rem;
+        }
 
         /* Control Panel */
         #control-panel {
@@ -69,20 +104,23 @@
             bottom: 2rem;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.9);
-            padding: 1rem 2rem;
-            border-radius: 16px;
+            display: flex;
+            gap: 1rem;
             z-index: 100;
         }
 
-        #toggle-signs {
-            background: #2196F3;
-            border: none;
+        .control-btn {
+            background: rgba(0,0,0,0.8);
+            border: 2px solid white;
             color: white;
-            padding: 0.8rem 1.5rem;
+            padding: 0.8rem 1.2rem;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 500;
+        }
+
+        .control-btn:hover {
+            background: rgba(255,255,255,0.2);
         }
 
         /* Loading Screen */
@@ -96,6 +134,7 @@
             align-items: center;
             justify-content: center;
             z-index: 1000;
+            color: white;
         }
 
         .spinner {
@@ -115,162 +154,257 @@
     <!-- Loading Screen -->
     <div id="loading">
         <div class="spinner"></div>
-        <p>Finding your location...</p>
+        <p>Setting up AR view...</p>
+        <p id="loading-detail">Requesting camera access...</p>
     </div>
 
-    <!-- Camera/Map Background -->
-    <div id="camera-view"></div>
+    <!-- AR Camera Feed -->
+    <div id="ar-camera">
+        <video id="camera-feed" autoplay muted playsinline></video>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="status-bar">
+        <span id="status-text">Finding your position & orientation...</span>
+    </div>
 
     <!-- Control Panel -->
     <div id="control-panel">
-        <button id="toggle-signs">Toggle All Signs</button>
+        <button class="control-btn" id="toggle-signs">Hide Signs</button>
+        <button class="control-btn" id="reset-view">Reset View</button>
     </div>
 
     <script>
-        // --- Local Places Database (Customize for your area!) ---
+        // --- LOCAL PLACES DATABASE (CUSTOMIZE FOR YOUR AREA!) ---
         const LOCAL_PLACES = [
             {
                 name: "Bath Abbey",
                 type: "landmark",
                 lat: 51.3809,
                 lng: -2.3609,
-                defaultPos: { top: '20%', left: '60%' } // Default screen position
+                compassBearing: 180 // Degrees from north (0 = north, 90 = east, 180 = south, 270 = west)
             },
             {
                 name: "Royal Victoria Park",
                 type: "park",
                 lat: 51.3938,
                 lng: -2.3552,
-                defaultPos: { top: '40%', left: '30%' }
+                compassBearing: 45
             },
             {
                 name: "M&S Food Hall",
                 type: "food",
                 lat: 51.3782,
                 lng: -2.3675,
-                defaultPos: { top: '60%', left: '70%' }
+                compassBearing: 270
             },
             {
                 name: "Great Western Road",
                 type: "road",
                 lat: 51.3820,
                 lng: -2.3700,
-                defaultPos: { top: '30%', left: '20%' }
+                compassBearing: 225
             },
             {
                 name: "SouthGate Shopping Centre",
                 type: "shop",
                 lat: 51.3756,
                 lng: -2.3630,
-                defaultPos: { top: '70%', left: '50%' }
+                compassBearing: 135
             }
         ];
 
-        // --- Core Variables ---
+        // --- CORE VARIABLES ---
         let userLocation = null;
+        let userHeading = null; // Degrees from north
         let signsActive = true;
+        let cameraStream = null;
         let roadSigns = [];
+        const SCREEN_CENTER_X = window.innerWidth / 2;
+        const SCREEN_CENTER_Y = window.innerHeight / 2;
 
-        // --- Calculate Distance Between Points ---
+        // --- CALCULATE DISTANCE BETWEEN POINTS (METERS) ---
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371000; // Meters
+            const R = 6371000;
             const φ1 = lat1 * Math.PI/180;
             const φ2 = lat2 * Math.PI/180;
-            const Δφ = (lat2-lat1)*Math.PI/180;
-            const Δλ = (lon2-lon1)*Math.PI/180;
-            
-            const a = Math.sin(Δφ/2)*Math.sin(Δφ/2) +
-                      Math.cos(φ1)*Math.cos(φ2)*
-                      Math.sin(Δλ/2)*Math.sin(Δλ/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return Math.round(R * c); // Distance in meters
+            const Δφ = (lat2 - lat1) * Math.PI/180;
+            const Δλ = (lon2 - lon1) * Math.PI/180;
+            const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+            return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
         }
 
-        // --- Create Floating Sign ---
-        function createRoadSign(place) {
-            const sign = document.createElement('div');
-            sign.className = `road-sign sign-type-${place.type}`;
-            sign.style.top = place.defaultPos.top;
-            sign.style.left = place.defaultPos.left;
+        // --- CALCULATE RELATIVE BEARING BETWEEN USER AND PLACE ---
+        function calculateRelativeBearing(userHeading, placeBearing) {
+            let relative = placeBearing - userHeading;
+            if (relative < 0) relative += 360;
+            return relative;
+        }
 
-            // Update sign content
-            function updateSignContent(distance) {
+        // --- CREATE AR ROAD SIGN ---
+        function createARSign(place) {
+            const sign = document.createElement('div');
+            sign.className = `ar-sign sign-type-${place.type}`;
+            sign.dataset.place = place.name;
+            
+            // Update sign content and position
+            function updateSign(distance, relativeBearing) {
+                // Set distance text
+                let distanceText = distance < 100 
+                    ? 'Almost there!' 
+                    : distance > 1000 
+                        ? `${(distance / 1000).toFixed(1)}km` 
+                        : `${distance}m`;
+
                 sign.innerHTML = `
-                    <div class="sign-distance">${distance}m away</div>
+                    <div class="sign-distance">${distanceText}</div>
                     <div class="sign-name">${place.name}</div>
                     <div class="sign-direction">${place.type.charAt(0).toUpperCase() + place.type.slice(1)}</div>
                 `;
+
+                // Position sign based on relative bearing (AR-style)
+                // Left/right = based on compass bearing
+                // Top/bottom = based on distance (closer = lower)
+                const offsetX = (relativeBearing - 180) * (window.innerWidth / 360);
+                const topPos = distance < 500 
+                    ? `${SCREEN_CENTER_Y + (500 - distance) * 0.1}px` 
+                    : `${SCREEN_CENTER_Y - 100}px`;
+
+                sign.style.left = `${SCREEN_CENTER_X + offsetX}px`;
+                sign.style.top = topPos;
+
+                // Show sign only if it's within 180 degrees of current view
+                if (Math.abs(relativeBearing - 180) < 90 && signsActive) {
+                    sign.classList.add('active');
+                } else {
+                    sign.classList.remove('active');
+                }
             }
 
-            // Initial update
-            updateSignContent('Calculating...');
-            
-            document.getElementById('camera-view').appendChild(sign);
-            return { element: sign, update: updateSignContent };
+            document.getElementById('ar-camera').appendChild(sign);
+            return { element: sign, update: updateSign };
         }
 
-        // --- Track User Location ---
-        function trackUserLocation() {
-            if (!navigator.geolocation) {
-                alert("Geolocation not supported by your browser");
-                return;
-            }
-
-            // Get initial location
-            navigator.geolocation.getCurrentPosition(pos => {
-                userLocation = {
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude
-                };
-
-                // Hide loading screen
-                document.getElementById('loading').style.display = 'none';
-
-                // Generate all signs
-                LOCAL_PLACES.forEach(place => {
-                    const sign = createRoadSign(place);
-                    roadSigns.push({ place, sign });
+        // --- INITIALIZE CAMERA FEED ---
+        async function initCamera() {
+            try {
+                document.getElementById('loading-detail').textContent = "Starting camera feed...";
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' } // Use back camera
                 });
-
-                // Update signs continuously
-                setInterval(updateAllSigns, 1000);
-            }, error => {
-                document.getElementById('loading').innerHTML = `<p>Couldn't get location: ${error.message}</p>`;
-            }, { enableHighAccuracy: true });
+                document.getElementById('camera-feed').srcObject = cameraStream;
+                return true;
+            } catch (err) {
+                document.getElementById('loading-detail').textContent = `Camera error: ${err.message}`;
+                return false;
+            }
         }
 
-        // --- Update All Signs ---
+        // --- TRACK USER LOCATION & ORIENTATION ---
+        function trackUser() {
+            // Track GPS location
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(
+                    pos => {
+                        userLocation = {
+                            lat: pos.coords.latitude,
+                            lng: pos.coords.longitude
+                        };
+                        document.getElementById('status-text').textContent = 
+                            `Location: ${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`;
+                    },
+                    err => {
+                        document.getElementById('status-text').textContent = `Location error: ${err.message}`;
+                    },
+                    { enableHighAccuracy: true, maximumAge: 1000 }
+                );
+            }
+
+            // Track compass heading
+            if (window.DeviceOrientationEvent) {
+                // Request permission for orientation access
+                if (DeviceOrientationEvent.requestPermission) {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(permissionState => {
+                            if (permissionState === 'granted') {
+                                window.addEventListener('deviceorientationabsolute', updateHeading);
+                            } else {
+                                document.getElementById('status-text').textContent = "Orientation access denied";
+                            }
+                        });
+                } else {
+                    window.addEventListener('deviceorientationabsolute', updateHeading);
+                }
+            }
+        }
+
+        // --- UPDATE USER HEADING ---
+        function updateHeading(event) {
+            if (event.webkitCompassHeading) {
+                userHeading = event.webkitCompassHeading; // iOS
+            } else {
+                userHeading = (360 - event.alpha) % 360; // Android
+            }
+        }
+
+        // --- UPDATE ALL AR SIGNS ---
         function updateAllSigns() {
-            if (!userLocation || !signsActive) return;
+            if (!userLocation || !userHeading) return;
 
             roadSigns.forEach(({ place, sign }) => {
+                // Calculate distance to place
                 const distance = calculateDistance(
                     userLocation.lat, userLocation.lng,
                     place.lat, place.lng
                 );
 
-                // Update distance text
-                let distanceText = distance < 100 ? 'Almost there!' : `${distance}m`;
-                sign.update(distanceText);
+                // Calculate relative bearing (where the place is vs where user is facing)
+                const relativeBearing = calculateRelativeBearing(userHeading, place.compassBearing);
 
-                // Move sign slightly based on position relative to user
-                const offsetX = (Math.random() - 0.5) * 10;
-                const offsetY = (Math.random() - 0.5) * 10;
-                sign.element.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+                // Update sign
+                sign.update(distance, relativeBearing);
             });
         }
 
-        // --- Toggle Signs On/Off ---
+        // --- TOGGLE SIGNS ON/OFF ---
         document.getElementById('toggle-signs').addEventListener('click', () => {
             signsActive = !signsActive;
-            document.querySelectorAll('.road-sign').forEach(sign => {
-                sign.style.display = signsActive ? 'block' : 'none';
+            document.querySelectorAll('.ar-sign').forEach(sign => {
+                if (signsActive) sign.classList.add('active');
+                else sign.classList.remove('active');
             });
-            document.getElementById('toggle-signs').textContent = signsActive ? 'Hide All Signs' : 'Show All Signs';
+            document.getElementById('toggle-signs').textContent = signsActive ? 'Hide Signs' : 'Show Signs';
         });
 
-        // --- Start App ---
-        trackUserLocation();
+        // --- RESET VIEW ---
+        document.getElementById('reset-view').addEventListener('click', () => {
+            window.location.reload();
+        });
+
+        // --- INITIALIZE APP ---
+        async function startApp() {
+            // Initialize camera first
+            const cameraReady = await initCamera();
+            if (!cameraReady) return;
+
+            // Create all signs
+            LOCAL_PLACES.forEach(place => {
+                const sign = createARSign(place);
+                roadSigns.push({ place, sign });
+            });
+
+            // Track user data
+            trackUser();
+
+            // Hide loading screen
+            document.getElementById('loading').style.display = 'none';
+
+            // Update signs 10 times per second for smooth movement
+            setInterval(updateAllSigns, 100);
+        }
+
+        // Start the AR experience!
+        startApp();
     </script>
 </body>
 </html>
