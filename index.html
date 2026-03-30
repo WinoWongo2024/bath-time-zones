@@ -57,20 +57,17 @@
     </div>
 
     <div class="container" id="mainContainer">
-        <!-- Permission Prompt (Visible by default) -->
         <div class="permission-prompt" id="permissionPrompt">
             <h2>We need your exact location</h2>
             <p>Bath is divided into a full grid of 7 custom time zones - we need high-accuracy location to place you correctly.</p>
             <button class="btn" id="requestLocationBtn">Find My Time Zone</button>
         </div>
 
-        <!-- Loading Message (Hidden by default) -->
         <div class="loading-message" id="loadingMessage">
             <h3>Finding your position...</h3>
             <p>Please wait while we map your location to a Bath time zone</p>
         </div>
 
-        <!-- Time Card (Hidden by default) -->
         <div class="time-card" id="timeCard">
             <h2 id="zoneName">Loading...</h2>
             <div class="time-display" id="timeDisplay">--:--:--</div>
@@ -83,16 +80,13 @@
             </div>
         </div>
 
-        <!-- Map (Hidden by default) -->
         <div class="map-container" id="zoneMap"></div>
 
-        <!-- Map Key (Hidden by default) -->
         <div class="map-key" id="mapKey">
             <h3>Bath Time Zone Key</h3>
             <div class="key-grid" id="keyGrid"></div>
         </div>
 
-        <!-- Notification Prompt (Hidden by default) -->
         <div class="notification-prompt" id="notificationPrompt">
             <p>Get alerts when you cross Bath time zone lines!</p>
             <button class="notification-btn" id="requestNotificationBtn">Allow Notifications</button>
@@ -105,7 +99,6 @@
     </footer>
 
     <script>
-        // FULL BATH GRID TIME ZONES
         const BATH_FULL_ZONES = [
             {
                 zoneName: "Bath North Time",
@@ -186,7 +179,7 @@
             }
         ];
 
-        // Get all elements by ID (no more DOM rewriting issues!)
+        // Elements
         const zoneBanner = document.getElementById('zoneBanner');
         const permissionPrompt = document.getElementById('permissionPrompt');
         const loadingMessage = document.getElementById('loadingMessage');
@@ -197,7 +190,6 @@
         const requestLocationBtn = document.getElementById('requestLocationBtn');
         const requestNotificationBtn = document.getElementById('requestNotificationBtn');
         
-        // Time card elements
         const zoneNameEl = document.getElementById('zoneName');
         const timeDisplayEl = document.getElementById('timeDisplay');
         const dateDisplayEl = document.getElementById('dateDisplay');
@@ -207,10 +199,16 @@
         const zoneColorEl = document.getElementById('zoneColor');
         const keyGridEl = document.getElementById('keyGrid');
 
+        // Anti-bounce settings
         let currentZone = null;
         let bathMap = null;
+        let lastKnownLat = null;
+        let lastKnownLng = null;
+        const POSITION_THRESHOLD = 0.0005; // ~50 meters - adjust if needed
+        const ZONE_CHANGE_DELAY = 2000; // 2 seconds - wait before confirming change
+        let zoneChangeTimer = null;
 
-        // Build Map Key (runs once on load)
+        // Build Map Key
         function buildMapKey() {
             keyGridEl.innerHTML = BATH_FULL_ZONES.map(zone => `
                 <div class="key-item">
@@ -225,7 +223,7 @@
         }
         buildMapKey();
 
-        // Initialize Map (runs once when needed)
+        // Initialize Map
         function initMap() {
             bathMap = L.map('zoneMap').setView([51.3875, -2.3500], 13);
             
@@ -233,7 +231,6 @@
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(bathMap);
 
-            // Add all zones
             BATH_FULL_ZONES.forEach(zone => {
                 L.polygon(zone.boundaries, {
                     color: '#000',
@@ -253,9 +250,20 @@
             L.control.scale({ position: 'bottomleft' }).addTo(bathMap);
         }
 
-        // Zone Detection (fixed logic)
+        // Calculate distance between two points (meters)
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const φ1 = lat1 * Math.PI/180;
+            const φ2 = lat2 * Math.PI/180;
+            const Δφ = (lat2 - lat1) * Math.PI/180;
+            const Δλ = (lon2 - lon1) * Math.PI/180;
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Zone Detection
         function getZoneFromCoordinates(lat, lng) {
-            // First check if user is within Bath's overall boundary
             const bathOverall = [
                 [51.3500, -2.4050], [51.3500, -2.2950],
                 [51.4250, -2.2950], [51.4250, -2.4050]
@@ -268,9 +276,8 @@
                 if (intersect) inBath = !inBath;
             }
 
-            if (!inBath) return BATH_FULL_ZONES[2]; // Fallback to City Centre if outside Bath
+            if (!inBath) return BATH_FULL_ZONES[2];
 
-            // Check which zone user is in
             for (const zone of BATH_FULL_ZONES) {
                 let inside = false;
                 for (let i = 0, j = zone.boundaries.length - 1; i < zone.boundaries.length; j = i++) {
@@ -284,7 +291,7 @@
             return BATH_FULL_ZONES[2];
         }
 
-        // Calculate & Update Time
+        // Update Time Display
         function updateTimeDisplay(zone) {
             const now = new Date();
             const zoneTime = new Date(now.getTime() + (zone.offsetMinutes * 60000));
@@ -301,23 +308,18 @@
             offsetDisplayEl.textContent = zone.offsetMinutes > 0 ? `+${zone.offsetMinutes} mins` : `${zone.offsetMinutes} mins`;
         }
 
-        // Update UI With Zone Data (fixed visibility logic)
+        // Update UI With Zone Data
         function updateUIWithZone(zone) {
             currentZone = zone;
 
-            // Update banner text
             zoneBanner.textContent = `${zone.zoneName} (${zone.zoneCode}) | ${zone.offsetMinutes > 0 ? '+' : ''}${zone.offsetMinutes} mins`;
-
-            // Update time card content
             zoneNameEl.textContent = `${zone.zoneName} (${zone.zoneCode})`;
             zoneDescriptionEl.textContent = zone.description;
             zoneColorEl.style.backgroundColor = zone.color;
 
-            // Update time immediately, then every second
             updateTimeDisplay(zone);
             setInterval(() => updateTimeDisplay(zone), 1000);
 
-            // Add user marker to map
             if (!bathMap) initMap();
             const userMarker = L.marker([bathMap.getCenter().lat, bathMap.getCenter().lng], {
                 icon: L.divIcon({ 
@@ -327,7 +329,6 @@
             }).addTo(bathMap);
             userMarker.bindPopup(`You're here: ${zone.zoneName}`).openPopup();
 
-            // Show/hide correct elements
             permissionPrompt.style.display = 'none';
             loadingMessage.style.display = 'none';
             timeCard.style.display = 'block';
@@ -336,44 +337,81 @@
             notificationPrompt.style.display = 'block';
         }
 
-        // Location Request (fixed flow)
+        // Handle New Position Updates
+        function handleNewPosition(position) {
+            const userLat = position.coords.latitude;
+            const userLng = position.coords.longitude;
+
+            // First run - set last known position and assign zone
+            if (!lastKnownLat || !lastKnownLng) {
+                lastKnownLat = userLat;
+                lastKnownLng = userLng;
+                const userZone = getZoneFromCoordinates(userLat, userLng);
+                updateUIWithZone(userZone);
+                return;
+            }
+
+            // Calculate distance from last known position
+            const distanceMoved = calculateDistance(lastKnownLat, lastKnownLng, userLat, userLng);
+
+            // Only process if moved more than threshold (~50 meters)
+            if (distanceMoved < POSITION_THRESHOLD * 1000) {
+                return; // Ignore tiny GPS fluctuations
+            }
+
+            // Update last known position
+            lastKnownLat = userLat;
+            lastKnownLng = userLng;
+
+            // Check for new zone
+            const newZone = getZoneFromCoordinates(userLat, userLng);
+            if (newZone.zoneName !== currentZone.zoneName) {
+                // Clear any existing timer
+                if (zoneChangeTimer) clearTimeout(zoneChangeTimer);
+                
+                // Wait before confirming change to prevent bouncing
+                zoneChangeTimer = setTimeout(() => {
+                    updateUIWithZone(newZone);
+                    if (Notification.permission === 'granted') {
+                        new Notification('Crossed Bath Time Zone Line!', {
+                            body: `Now in ${newZone.zoneName}`,
+                            icon: 'icons/icon-192x192.png'
+                        });
+                    }
+                }, ZONE_CHANGE_DELAY);
+            }
+        }
+
+        // Location Request
         function requestPreciseLocation() {
-            // Hide prompt, show loading
             permissionPrompt.style.display = 'none';
             loadingMessage.style.display = 'block';
             zoneBanner.textContent = "Locating your Bath time zone...";
 
             if (!navigator.geolocation) {
-                // Handle no geolocation support
                 zoneBanner.textContent = "Location not supported - Using City Centre Time";
                 loadingMessage.style.display = 'none';
                 updateUIWithZone(BATH_FULL_ZONES[2]);
                 return;
             }
 
-            // Get current position
             navigator.geolocation.getCurrentPosition(
                 position => {
                     try {
-                        const userLat = position.coords.latitude;
-                        const userLng = position.coords.longitude;
-                        const userZone = getZoneFromCoordinates(userLat, userLng);
-                        updateUIWithZone(userZone);
-
-                        // Watch for position changes
-                        navigator.geolocation.watchPosition(newPos => {
-                            const newZone = getZoneFromCoordinates(newPos.coords.latitude, newPos.coords.longitude);
-                            if (newZone.zoneName !== currentZone.zoneName) {
-                                updateUIWithZone(newZone);
-                                // Send notification if enabled
-                                if (Notification.permission === 'granted') {
-                                    new Notification('Crossed Bath Time Zone Line!', {
-                                        body: `Now in ${newZone.zoneName}`,
-                                        icon: 'icons/icon-192x192.png'
-                                    });
-                                }
+                        handleNewPosition(position);
+                        // Watch position with reduced frequency
+                        navigator.geolocation.watchPosition(
+                            handleNewPosition,
+                            error => {
+                                console.error('Watch position error:', error);
+                            },
+                            { 
+                                enableHighAccuracy: true, 
+                                timeout: 15000, 
+                                maximumAge: 5000, // Only update every 5 seconds
+                                frequency: 5000 
                             }
-                        });
+                        );
                     } catch (error) {
                         console.error('Error processing location:', error);
                         zoneBanner.textContent = "Error finding zone - Using City Centre Time";
@@ -382,7 +420,6 @@
                     }
                 },
                 error => {
-                    // Handle location errors
                     let errorMsg = "Using City Centre Time";
                     if (error.code === 1) errorMsg = "Location access denied - " + errorMsg;
                     if (error.code === 2) errorMsg = "Location unavailable - " + errorMsg;
@@ -421,7 +458,6 @@
             if (navigator.permissions) {
                 navigator.permissions.query({ name: 'geolocation' }).then(status => {
                     if (status.state === 'granted') {
-                        // Auto-request location if already granted
                         requestPreciseLocation();
                     }
                 });
