@@ -1,5 +1,5 @@
-const CACHE_NAME = 'bath-timezones-v2.2';
-const PRECACHE_ASSETS = [
+const CACHE_NAME = 'freenav-v1';
+const CACHE_ASSETS = [
     '/',
     '/index.html',
     '/manifest.json',
@@ -7,25 +7,35 @@ const PRECACHE_ASSETS = [
     '/icons/icon-512x512.png'
 ];
 
-self.addEventListener('install', e => {
-    self.skipWaiting();
-    e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_ASSETS)));
-});
-
-self.addEventListener('fetch', e => {
-    if (e.request.mode === 'navigate' || (e.request.method === 'GET' && e.request.headers.get('accept').includes('text/html'))) {
-        e.respondWith(
-            fetch(e.request).catch(() => caches.match('/index.html'))
-        );
-        return;
-    }
-    e.respondWith(
-        caches.match(e.request).then(cached => cached || fetch(e.request))
+// Precache assets
+self.addEventListener('install', (e) => {
+    e.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(cache => cache.addAll(CACHE_ASSETS))
     );
 });
 
-self.addEventListener('activate', e => {
+// Serve cached assets offline
+self.addEventListener('fetch', (e) => {
+    // Bypass cache for map tiles and geocoding (needs fresh data)
+    if (e.request.url.includes('openstreetmap.org') || e.request.url.includes('nominatim')) {
+        e.respondWith(fetch(e.request));
+        return;
+    }
+
+    e.respondWith(
+        caches.match(e.request)
+            .then(cachedResponse => cachedResponse || fetch(e.request))
+    );
+});
+
+// Clean up old caches
+self.addEventListener('activate', (e) => {
     e.waitUntil(
-        caches.keys().then(keys => keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))
+        caches.keys().then(keys => {
+            return Promise.all(keys.map(key => {
+                if (key !== CACHE_NAME) return caches.delete(key);
+            }));
+        })
     );
 });
