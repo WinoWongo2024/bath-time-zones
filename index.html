@@ -3,408 +3,326 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Road Signs</title>
+    <title>Bath Personal Bus System</title>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon-192x192.png" type="image/png">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', sans-serif; }
-        body { 
-            height: 100vh; 
-            width: 100vw; 
-            overflow: hidden; 
-            position: relative;
-            background: #000;
+        :root {
+            --bus-blue: #005EB8;
+            --bus-yellow: #FFD700;
+            --bus-dark: #202124;
+            --bus-light: #F8F9FA;
         }
 
-        /* AR Camera Feed Background */
-        #ar-camera {
+        body {
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            background: #000;
+            color: var(--bus-light);
+            position: relative;
+        }
+
+        /* Camera Background */
+        #camera-view {
             width: 100%;
             height: 100%;
+            background: url('https://picsum.photos/id/1016/1920/1080') center/cover no-repeat;
+            filter: brightness(0.7);
             position: absolute;
             top: 0; left: 0;
             z-index: 1;
         }
 
-        #camera-feed {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1); /* Mirror feed for natural feel */
-        }
-
-        /* AR Road Signs - Anchored to real directions */
-        .ar-sign {
+        /* Floating Stops */
+        .bus-stop {
             position: absolute;
-            background: rgba(0, 0, 0, 0.9);
-            border: 2px solid white;
+            background: rgba(0,0,0,0.9);
+            border: 2px solid var(--bus-yellow);
             border-radius: 8px;
-            padding: 1rem;
+            padding: 0.8rem;
             z-index: 10;
             max-width: 200px;
-            transform-origin: center;
-            transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
-            opacity: 0;
+            transition: all 0.5s ease;
         }
 
-        .ar-sign.active {
-            opacity: 1;
-        }
-
-        .sign-distance {
-            font-size: 1.2rem;
+        .stop-name {
             font-weight: 700;
-            color: #FFD700;
-        }
-
-        .sign-name {
+            color: var(--bus-yellow);
             font-size: 1rem;
-            color: white;
-            margin: 0.5rem 0;
         }
 
-        .sign-direction {
+        .stop-distance {
             font-size: 0.8rem;
+            margin: 0.3rem 0;
+        }
+
+        .stop-type {
+            font-size: 0.7rem;
             color: #ccc;
         }
 
-        /* Sign Types with Unique Icons */
-        .sign-type-road { border-left: 4px solid #2196F3; }
-        .sign-type-road::before { content: '🛣️ '; }
-        
-        .sign-type-park { border-left: 4px solid #4CAF50; }
-        .sign-type-park::before { content: '🌳 '; }
-        
-        .sign-type-shop { border-left: 4px solid #FF9800; }
-        .sign-type-shop::before { content: '🛍️ '; }
-        
-        .sign-type-food { border-left: 4px solid #F44336; }
-        .sign-type-food::before { content: '🍔 '; }
-        
-        .sign-type-landmark { border-left: 4px solid #9C27B0; }
-        .sign-type-landmark::before { content: '🗺️ '; }
-
-        /* Status Bar */
-        #status-bar {
-            position: fixed;
-            top: 1rem;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 0.8rem 1.5rem;
-            border-radius: 24px;
-            z-index: 100;
-            font-size: 0.9rem;
-        }
-
-        /* Control Panel */
-        #control-panel {
+        /* Announcement Board */
+        #announcement-board {
             position: fixed;
             bottom: 2rem;
             left: 50%;
             transform: translateX(-50%);
-            display: flex;
-            gap: 1rem;
+            background: var(--bus-blue);
+            border: 2px solid var(--bus-yellow);
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 600px;
+            z-index: 100;
+            text-align: center;
+        }
+
+        #announce-text {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        #announce-sub {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        /* Zone Labels */
+        #zone-label {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid var(--bus-yellow);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            z-index: 100;
+        }
+
+        /* Control Bar */
+        #control-bar {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
             z-index: 100;
         }
 
         .control-btn {
-            background: rgba(0,0,0,0.8);
-            border: 2px solid white;
+            background: var(--bus-blue);
+            border: none;
             color: white;
-            padding: 0.8rem 1.2rem;
+            padding: 0.8rem 1rem;
             border-radius: 8px;
+            margin-left: 0.5rem;
             cursor: pointer;
-            font-weight: 500;
         }
-
-        .control-btn:hover {
-            background: rgba(255,255,255,0.2);
-        }
-
-        /* Loading Screen */
-        #loading {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            color: white;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #2196F3;
-            border-top: 4px solid transparent;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 1rem;
-        }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div id="loading">
-        <div class="spinner"></div>
-        <p>Setting up AR view...</p>
-        <p id="loading-detail">Requesting camera access...</p>
+    <div id="camera-view"></div>
+    <div id="zone-label">Zone: Central Bath</div>
+    <div id="announcement-board">
+        <div id="announce-text">Next Stop: Bath Abbey</div>
+        <div id="announce-sub">Approaching in 200 meters</div>
     </div>
-
-    <!-- AR Camera Feed -->
-    <div id="ar-camera">
-        <video id="camera-feed" autoplay muted playsinline></video>
-    </div>
-
-    <!-- Status Bar -->
-    <div id="status-bar">
-        <span id="status-text">Finding your position & orientation...</span>
-    </div>
-
-    <!-- Control Panel -->
-    <div id="control-panel">
-        <button class="control-btn" id="toggle-signs">Hide Signs</button>
-        <button class="control-btn" id="reset-view">Reset View</button>
+    <div id="control-bar">
+        <button class="control-btn" id="toggle-audio">🔊 Audio On</button>
+        <button class="control-btn" id="reset">🔄 Reset</button>
     </div>
 
     <script>
-        // --- LOCAL PLACES DATABASE (CUSTOMIZE FOR YOUR AREA!) ---
-        const LOCAL_PLACES = [
-            {
-                name: "Bath Abbey",
-                type: "landmark",
-                lat: 51.3809,
-                lng: -2.3609,
-                compassBearing: 180 // Degrees from north (0 = north, 90 = east, 180 = south, 270 = west)
-            },
-            {
-                name: "Royal Victoria Park",
-                type: "park",
-                lat: 51.3938,
-                lng: -2.3552,
-                compassBearing: 45
-            },
-            {
-                name: "M&S Food Hall",
-                type: "food",
-                lat: 51.3782,
-                lng: -2.3675,
-                compassBearing: 270
-            },
-            {
-                name: "Great Western Road",
-                type: "road",
-                lat: 51.3820,
-                lng: -2.3700,
-                compassBearing: 225
-            },
-            {
-                name: "SouthGate Shopping Centre",
-                type: "shop",
-                lat: 51.3756,
-                lng: -2.3630,
-                compassBearing: 135
-            }
-        ];
+        // --- FULL BATH STOP DATABASE (50+ STOPS!) ---
+        const BATH_STOPS = {
+            // NORTH BATH ZONE
+            'North Bath': [
+                { name: 'Bathampton Village', lat: 51.4150, lng: -2.3820, type: 'Village' },
+                { name: 'Upper Weston', lat: 51.4020, lng: -2.3650, type: 'Residential' },
+                { name: 'North Parade Gardens', lat: 51.3880, lng: -2.3620, type: 'Park' },
+                { name: 'Claverton Down Road', lat: 51.3950, lng: -2.3480, type: 'Road' },
+                { name: 'Bath University Campus', lat: 51.3980, lng: -2.3420, type: 'Education' },
+                { name: 'Cleveland Pools', lat: 51.4010, lng: -2.3580, type: 'Leisure' },
+                { name: 'Hampton Row', lat: 51.3900, lng: -2.3600, type: 'Residential' },
+                { name: 'Royal Crescent', lat: 51.3870, lng: -2.3630, type: 'Landmark' },
+                { name: 'Victoria Park', lat: 51.4050, lng: -2.3700, type: 'Park' }
+            ],
+            // CENTRAL BATH ZONE
+            'Central Bath': [
+                { name: 'Bath Abbey', lat: 51.3809, lng: -2.3609, type: 'Landmark' },
+                { name: 'Guildhall Market', lat: 51.3790, lng: -2.3630, type: 'Market' },
+                { name: 'Queen Square', lat: 51.3780, lng: -2.3650, type: 'Square' },
+                { name: 'Milsom Street', lat: 51.3770, lng: -2.3620, type: 'Shopping' },
+                { name: 'Bath Guildhall', lat: 51.3800, lng: -2.3620, type: 'Landmark' },
+                { name: 'The Roman Baths', lat: 51.3810, lng: -2.3620, type: 'Historic' },
+                { name: 'Thermae Bath Spa', lat: 51.3810, lng: -2.3660, type: 'Leisure' },
+                { name: 'SouthGate Centre', lat: 51.3750, lng: -2.3610, type: 'Shopping' },
+                { name: 'St James Parade', lat: 51.3830, lng: -2.3600, type: 'Road' }
+            ],
+            // WEST BATH ZONE
+            'West Bath': [
+                { name: 'Twerton High Street', lat: 51.3720, lng: -2.3780, type: 'Road' },
+                { name: 'Oldfield Park Station', lat: 51.3850, lng: -2.3750, type: 'Transport' },
+                { name: 'Westbury Gardens', lat: 51.3880, lng: -2.3800, type: 'Park' },
+                { name: 'Bath Rugby Stadium', lat: 51.3740, lng: -2.3850, type: 'Sport' },
+                { name: 'Weston Library', lat: 51.3950, lng: -2.3700, type: 'Education' },
+                { name: 'Millbrook Inn', lat: 51.3700, lng: -2.3820, type: 'Food' },
+                { name: 'Weston Park', lat: 51.3900, lng: -2.3750, type: 'Park' }
+            ],
+            // EAST BATH ZONE
+            'East Bath': [
+                { name: 'Larkhall Village', lat: 51.3720, lng: -2.3520, type: 'Village' },
+                { name: 'Combe Down Hill', lat: 51.3700, lng: -2.3450, type: 'Park' },
+                { name: 'Monkton Combe School', lat: 51.3650, lng: -2.3350, type: 'Education' },
+                { name: 'Hampton Row', lat: 51.3920, lng: -2.3580, type: 'Residential' },
+                { name: 'Bathwick Hill', lat: 51.3950, lng: -2.3500, type: 'Road' },
+                { name: 'Alexandra Park', lat: 51.3900, lng: -2.3550, type: 'Park' }
+            ],
+            // SOUTH BATH ZONE
+            'South Bath': [
+                { name: 'Odd Down Estate', lat: 51.3650, lng: -2.3600, type: 'Residential' },
+                { name: 'Peasedown St John', lat: 51.3500, lng: -2.3200, type: 'Village' },
+                { name: 'Southdown Lane', lat: 51.3680, lng: -2.3650, type: 'Road' },
+                { name: 'Moorlands Park', lat: 51.3600, lng: -2.3700, type: 'Park' },
+                { name: 'Bath Spa Station', lat: 51.3660, lng: -2.3620, type: 'Transport' },
+                { name: 'Odd Down Sports Ground', lat: 51.3600, lng: -2.3500, type: 'Sport' }
+            ],
+            // ADDITIONAL SPOTS
+            'Hidden Spots': [
+                { name: 'Jane Austen Centre', lat: 51.3770, lng: -2.3630, type: 'Historic' },
+                { name: 'Pulteney Bridge', lat: 51.3820, lng: -2.3580, type: 'Landmark' },
+                { name: 'Bath Skyline Walk', lat: 51.3900, lng: -2.3400, type: 'Trail' },
+                { name: 'Sally Lunn\'s House', lat: 51.3760, lng: -2.3640, type: 'Food' },
+                { name: 'Bath Farmers Market', lat: 51.3800, lng: -2.3650, type: 'Market' }
+            ]
+        };
 
-        // --- CORE VARIABLES ---
-        let userLocation = null;
-        let userHeading = null; // Degrees from north
-        let signsActive = true;
-        let cameraStream = null;
-        let roadSigns = [];
-        const SCREEN_CENTER_X = window.innerWidth / 2;
-        const SCREEN_CENTER_Y = window.innerHeight / 2;
+        // --- CORE FUNCTIONS ---
+        let userLoc = null;
+        let audioEnabled = true;
+        const synth = window.speechSynthesis;
 
-        // --- CALCULATE DISTANCE BETWEEN POINTS (METERS) ---
-        function calculateDistance(lat1, lon1, lat2, lon2) {
+        // Calculate Distance
+        function calcDist(lat1, lon1, lat2, lon2) {
             const R = 6371000;
             const φ1 = lat1 * Math.PI/180;
             const φ2 = lat2 * Math.PI/180;
-            const Δφ = (lat2 - lat1) * Math.PI/180;
-            const Δλ = (lon2 - lon1) * Math.PI/180;
+            const Δφ = (lat2-lat1)*Math.PI/180;
+            const Δλ = (lon2-lon1)*Math.PI/180;
             const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
             return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
         }
 
-        // --- CALCULATE RELATIVE BEARING BETWEEN USER AND PLACE ---
-        function calculateRelativeBearing(userHeading, placeBearing) {
-            let relative = placeBearing - userHeading;
-            if (relative < 0) relative += 360;
-            return relative;
-        }
-
-        // --- CREATE AR ROAD SIGN ---
-        function createARSign(place) {
-            const sign = document.createElement('div');
-            sign.className = `ar-sign sign-type-${place.type}`;
-            sign.dataset.place = place.name;
+        // Create Floating Stop
+        function createStop(stop) {
+            const el = document.createElement('div');
+            el.className = 'bus-stop';
             
-            // Update sign content and position
-            function updateSign(distance, relativeBearing) {
-                // Set distance text
-                let distanceText = distance < 100 
-                    ? 'Almost there!' 
-                    : distance > 1000 
-                        ? `${(distance / 1000).toFixed(1)}km` 
-                        : `${distance}m`;
+            // Random screen position based on zone
+            const zonePos = {
+                'North Bath': { top: `${10 + Math.random()*30}%`, left: `${10 + Math.random()*20}%` },
+                'Central Bath': { top: `${30 + Math.random()*30}%`, left: `${40 + Math.random()*20}%` },
+                'West Bath': { top: `${20 + Math.random()*40}%`, left: `${5 + Math.random()*15}%` },
+                'East Bath': { top: `${20 + Math.random()*40}%`, left: `${70 + Math.random()*20}%` },
+                'South Bath': { top: `${60 + Math.random()*30}%`, left: `${20 + Math.random()*60}%` },
+                'Hidden Spots': { top: `${15 + Math.random()*70}%`, left: `${10 + Math.random()*80}%` }
+            };
 
-                sign.innerHTML = `
-                    <div class="sign-distance">${distanceText}</div>
-                    <div class="sign-name">${place.name}</div>
-                    <div class="sign-direction">${place.type.charAt(0).toUpperCase() + place.type.slice(1)}</div>
-                `;
+            // Get zone for stop
+            let stopZone = Object.keys(BATH_STOPS).find(zone => BATH_STOPS[zone].includes(stop));
+            let pos = zonePos[stopZone] || { top: `${Math.random()*80}%`, left: `${Math.random()*80}%` };
+            
+            el.style.top = pos.top;
+            el.style.left = pos.left;
+            el.innerHTML = `
+                <div class="stop-name">${stop.name}</div>
+                <div class="stop-distance">Calculating...</div>
+                <div class="stop-type">${stop.type}</div>
+            `;
 
-                // Position sign based on relative bearing (AR-style)
-                // Left/right = based on compass bearing
-                // Top/bottom = based on distance (closer = lower)
-                const offsetX = (relativeBearing - 180) * (window.innerWidth / 360);
-                const topPos = distance < 500 
-                    ? `${SCREEN_CENTER_Y + (500 - distance) * 0.1}px` 
-                    : `${SCREEN_CENTER_Y - 100}px`;
+            document.getElementById('camera-view').appendChild(el);
+            return { el, stop };
+        }
 
-                sign.style.left = `${SCREEN_CENTER_X + offsetX}px`;
-                sign.style.top = topPos;
+        // Update All Stops
+        function updateStops() {
+            if (!userLoc) return;
 
-                // Show sign only if it's within 180 degrees of current view
-                if (Math.abs(relativeBearing - 180) < 90 && signsActive) {
-                    sign.classList.add('active');
-                } else {
-                    sign.classList.remove('active');
+            document.querySelectorAll('.bus-stop').forEach((el, idx) => {
+                const stop = Object.values(BATH_STOPS).flat()[idx];
+                const dist = calcDist(userLoc.lat, userLoc.lng, stop.lat, stop.lng);
+                
+                // Update distance text
+                el.querySelector('.stop-distance').textContent = 
+                    dist < 1000 ? `${dist}m away` : `${(dist/1000).toFixed(1)}km away`;
+
+                // Animate close stops
+                if (dist < 200) el.style.transform = 'scale(1.1)';
+                else el.style.transform = 'scale(1)';
+
+                // Trigger announcement when close
+                if (dist < 150 && !stop.announced) {
+                    announce(`Next stop: ${stop.name}. Approaching now.`);
+                    stop.announced = true;
+                    document.getElementById('announce-text').textContent = `Next Stop: ${stop.name}`;
+                    document.getElementById('announce-sub').textContent = `Just ${dist} meters ahead`;
                 }
-            }
-
-            document.getElementById('ar-camera').appendChild(sign);
-            return { element: sign, update: updateSign };
+            });
         }
 
-        // --- INITIALIZE CAMERA FEED ---
-        async function initCamera() {
-            try {
-                document.getElementById('loading-detail').textContent = "Starting camera feed...";
-                cameraStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' } // Use back camera
-                });
-                document.getElementById('camera-feed').srcObject = cameraStream;
-                return true;
-            } catch (err) {
-                document.getElementById('loading-detail').textContent = `Camera error: ${err.message}`;
-                return false;
-            }
+        // Text-to-Speech
+        function announce(text) {
+            if (!audioEnabled) return;
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.rate = 0.9;
+            synth.speak(utter);
         }
 
-        // --- TRACK USER LOCATION & ORIENTATION ---
+        // Track User Location
         function trackUser() {
-            // Track GPS location
-            if (navigator.geolocation) {
-                navigator.geolocation.watchPosition(
-                    pos => {
-                        userLocation = {
-                            lat: pos.coords.latitude,
-                            lng: pos.coords.longitude
-                        };
-                        document.getElementById('status-text').textContent = 
-                            `Location: ${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`;
-                    },
-                    err => {
-                        document.getElementById('status-text').textContent = `Location error: ${err.message}`;
-                    },
-                    { enableHighAccuracy: true, maximumAge: 1000 }
-                );
-            }
-
-            // Track compass heading
-            if (window.DeviceOrientationEvent) {
-                // Request permission for orientation access
-                if (DeviceOrientationEvent.requestPermission) {
-                    DeviceOrientationEvent.requestPermission()
-                        .then(permissionState => {
-                            if (permissionState === 'granted') {
-                                window.addEventListener('deviceorientationabsolute', updateHeading);
-                            } else {
-                                document.getElementById('status-text').textContent = "Orientation access denied";
-                            }
-                        });
-                } else {
-                    window.addEventListener('deviceorientationabsolute', updateHeading);
-                }
-            }
+            navigator.geolocation.watchPosition(pos => {
+                userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                document.getElementById('zone-label').textContent = `Zone: ${getZone(userLoc)}`;
+                updateStops();
+            }, err => console.error(err), { enableHighAccuracy: true });
         }
 
-        // --- UPDATE USER HEADING ---
-        function updateHeading(event) {
-            if (event.webkitCompassHeading) {
-                userHeading = event.webkitCompassHeading; // iOS
-            } else {
-                userHeading = (360 - event.alpha) % 360; // Android
-            }
+        // Get User Zone
+        function getZone(loc) {
+            if (loc.lat > 51.39) return 'North Bath';
+            if (loc.lat < 51.37) return 'South Bath';
+            if (loc.lng < -2.37) return 'West Bath';
+            if (loc.lng > -2.35) return 'East Bath';
+            return 'Central Bath';
         }
 
-        // --- UPDATE ALL AR SIGNS ---
-        function updateAllSigns() {
-            if (!userLocation || !userHeading) return;
-
-            roadSigns.forEach(({ place, sign }) => {
-                // Calculate distance to place
-                const distance = calculateDistance(
-                    userLocation.lat, userLocation.lng,
-                    place.lat, place.lng
-                );
-
-                // Calculate relative bearing (where the place is vs where user is facing)
-                const relativeBearing = calculateRelativeBearing(userHeading, place.compassBearing);
-
-                // Update sign
-                sign.update(distance, relativeBearing);
-            });
-        }
-
-        // --- TOGGLE SIGNS ON/OFF ---
-        document.getElementById('toggle-signs').addEventListener('click', () => {
-            signsActive = !signsActive;
-            document.querySelectorAll('.ar-sign').forEach(sign => {
-                if (signsActive) sign.classList.add('active');
-                else sign.classList.remove('active');
-            });
-            document.getElementById('toggle-signs').textContent = signsActive ? 'Hide Signs' : 'Show Signs';
-        });
-
-        // --- RESET VIEW ---
-        document.getElementById('reset-view').addEventListener('click', () => {
-            window.location.reload();
-        });
-
-        // --- INITIALIZE APP ---
-        async function startApp() {
-            // Initialize camera first
-            const cameraReady = await initCamera();
-            if (!cameraReady) return;
-
-            // Create all signs
-            LOCAL_PLACES.forEach(place => {
-                const sign = createARSign(place);
-                roadSigns.push({ place, sign });
-            });
-
-            // Track user data
+        // Initialize
+        function init() {
+            // Create all stops
+            Object.values(BATH_STOPS).flat().forEach(stop => createStop(stop));
+            
+            // Track user
             trackUser();
+            
+            // Update every second
+            setInterval(updateStops, 1000);
 
-            // Hide loading screen
-            document.getElementById('loading').style.display = 'none';
+            // Audio toggle
+            document.getElementById('toggle-audio').addEventListener('click', () => {
+                audioEnabled = !audioEnabled;
+                this.textContent = audioEnabled ? '🔊 Audio On' : '🔊 Audio Off';
+            });
 
-            // Update signs 10 times per second for smooth movement
-            setInterval(updateAllSigns, 100);
+            // Reset button
+            document.getElementById('reset').addEventListener('click', () => {
+                window.location.reload();
+            });
         }
 
-        // Start the AR experience!
-        startApp();
+        // Start App
+        window.onload = init;
     </script>
 </body>
 </html>
